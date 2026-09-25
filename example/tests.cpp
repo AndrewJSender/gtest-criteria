@@ -16,10 +16,7 @@ TEST_F(MyTestFixture, Test1) {
     int input_value = 1;
     int result = test_function(input_value);
 
-    // log it to the test output
-    GTEST_SUCCEED() << "result:" << result;
-
-    // TODO retrieve expected result from external source
-    int expected_result = input_value * 2;
+    LogValue("result", result);
+    int expected_result = GetValue<int>("expected_result");
     EXPECT_EQ(result, expected_result);
 }
