@@ -94,7 +94,8 @@ commit connection URIs or credentials to source control.
 The SQL schema used by the listener is stored in
 `submodules/gtest_output-sql/sql/`.
 
-Note: Disabling the stability dimension would mean disabling the test itself.  This is why `criteria_disable_stability` does not exist.
+Note: Disabling the stability dimension would mean disabling the test itself.
+Therefore, `--criteria_disable_stability` is not available.
 
 ## License
 
