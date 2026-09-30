@@ -8,6 +8,7 @@
 
 int main(int argc, char* argv[]) {
     auto sql_output = ParseGtestSqlOutputArgument(&argc, argv);
+    GTestCriteriaFixture::ParseGtestDisableExpectPerformantArgument(&argc, argv);
     testing::InitGoogleTest(&argc, argv);
     RegisterSqlTestEventListenerIfRequested(sql_output);
     GTestCriteriaFixture::ConfigureSqlDb(sql_output);

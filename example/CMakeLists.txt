@@ -59,6 +59,7 @@ target_include_directories(example PRIVATE
 )
 target_compile_definitions(example PRIVATE
   SQL_TEST_EVENT_LISTENER_SQL_DIR="${SQL_OUTPUT_ROOT}/sql"
+  GTEST_CRITERIA_SQL_DIR="${PROJECT_ROOT}/sql/sqlite"
 )
 target_link_libraries(example PRIVATE
   sqlite
