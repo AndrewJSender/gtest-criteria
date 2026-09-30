@@ -5,6 +5,7 @@ project(gtest_criteria_example LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_XCODE_GENERATE_SCHEME ON)
 
 include(ExternalProject)
 
@@ -69,4 +70,16 @@ target_link_libraries(example PRIVATE
   sqlite
   PostgreSQL::PostgreSQL
   gtest
+)
+
+# XCode specific settings
+set(EXAMPLE_SCHEME_ARGUMENTS
+    "--gtest_repeat=5"
+    "--gtest_output=sqlite:test_output.db"
+    "--criteria_disable_expect_performant"
+    "--criteria_disable_expect_integrity"
+)
+
+set_target_properties(example PROPERTIES
+    XCODE_SCHEME_ARGUMENTS "${EXAMPLE_SCHEME_ARGUMENTS}"
 )

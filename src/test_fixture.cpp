@@ -15,8 +15,7 @@
 
 namespace {
 
-const std::string kCriteriaSqlFile =
-    std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
+const std::string kCriteriaSqlFile = std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
 const std::string kDisableExpectPerformantArgName = "--criteria_disable_expect_performant";
 const std::string kDisableExpectIntegrityArgName = "--criteria_disable_expect_integrity";
 
@@ -69,6 +68,40 @@ GTestCriteriaFixture::DurationStats GTestCriteriaFixture::ComputeDurationStats(
     return stats;
 }
 
+std::vector<std::string> GTestCriteriaFixture::QueryLoggedValueList(const std::string& logged_name) {
+    if (m_db == nullptr) {
+        throw std::runtime_error("No SQL database is configured");
+    }
+
+    const testing::TestInfo* test_info =
+        testing::UnitTest::GetInstance()->current_test_info();
+    if (test_info == nullptr) {
+        throw std::runtime_error("GetValueList must be called while a test is running");
+    }
+
+    const std::string pattern = logged_name + "=%";
+    const auto rows = m_db->Query(
+        kCriteriaSqlFile.c_str(), "select_logged_value_list",
+        {test_info->test_suite_name(), test_info->name(), pattern}, {});
+    if (rows.empty()) {
+        throw std::runtime_error("No logged values found for '" + logged_name + "'");
+    }
+
+    std::vector<std::string> values;
+    const std::string prefix = logged_name + "=";
+    for (const auto& row : rows) {
+        if (row.empty()) { continue; }
+        const std::string& entry = row.front();
+        if (entry.rfind(prefix, 0) == 0) {
+            values.push_back(entry.substr(prefix.size()));
+        }
+    }
+    if (values.empty()) {
+        throw std::runtime_error("Logged values for '" + logged_name + "' are empty");
+    }
+    return values;
+}
+
 std::string GTestCriteriaFixture::QueryLoggedValue(const std::string& logged_name) {
     if (m_db == nullptr) {
         throw std::runtime_error("No SQL database is configured");
@@ -99,8 +132,6 @@ std::string GTestCriteriaFixture::QueryLoggedValue(const std::string& logged_nam
     return value;
 }
 
-
-
 void GTestCriteriaFixture::SetUp()
 {
     test_timer = std::chrono::high_resolution_clock::now();
@@ -108,29 +139,18 @@ void GTestCriteriaFixture::SetUp()
 
 void GTestCriteriaFixture::EXPECT_PERFORMANT(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration)
 {
-    if (stats.count == 0) {
-        return;
-    }
+    if (stats.count == 0) { return; }
     
-    if (m_expect_performant_disabled) {
-        return;
-    }
+    if (m_expect_performant_disabled) { return; }
 
     // Example performance expectation: test duration should not exceed mean + 2 * stddev
-    const double threshold_ms = stats.mean + 2 * stats.stddev;
-    std::string values_str = std::to_string(stats.mean) + " + 2 * " + std::to_string(stats.stddev);
     const double test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-    EXPECT_LE(test_duration_ms, threshold_ms)
-    << "Test duration exceeded performance threshold."
-    <<  std::endl
-    << "stats.mean + 2 * stats.stddev = " << values_str;
+    EXPECT_NEAR(test_duration_ms, stats.mean, 2 * stats.stddev) << "Test duration exceeded performance threshold.";
 }
 
 void GTestCriteriaFixture::TearDown()
 {
     auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
-    const auto test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-
     const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
     const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
 

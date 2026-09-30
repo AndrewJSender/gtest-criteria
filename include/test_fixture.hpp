@@ -10,11 +10,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "parse_argument.hpp"
 #include "sql_backend.hpp"
 
-#define GTEST_LOG_VALUE(name, value) LogValue(name, value, __LINE__ , __FILE__)
+#define GTEST_LOG_VALUE(name, value, result_type) LogValue(name, value, result_type, __LINE__ , __FILE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
@@ -28,12 +29,16 @@ protected:
     static bool IsExpectIntegrityDisabled() { return m_expect_integrity_disabled; }
     
     template <typename T>
-    void LogValue(const std::string &logged_name, T value, int line_num = 0, std::string file = "");
+    void LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type = testing::TestPartResult::Type::kSuccess, int line_num = 0, std::string file = "");
 
     template <typename T>
     T GetValue(const std::string &logged_name);
+
+    template <typename T>
+    std::vector<T> GetValueList(const std::string &logged_name);
 private:
     static std::string QueryLoggedValue(const std::string& logged_name);
+    static std::vector<std::string> QueryLoggedValueList(const std::string& logged_name);
 
     // Mean and (population) standard deviation of `end_timestamp -
     // start_timestamp` across all completed rows of a table, in the same
@@ -61,11 +66,10 @@ private:
 };
 
 template <typename T>
-void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, int line_num, std::string file)
+void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, int line_num, std::string file)
 {
     testing::Message msg;
     msg << logged_name << "=" << value;
-    testing::TestPartResult::Type type = testing::TestPartResult::Type::kSuccess;
     testing::internal::AssertHelper ah {type, file.c_str(), line_num, ""};
     // =op calls the logging of test result part event
     ah = msg;
@@ -80,6 +84,20 @@ T GTestCriteriaFixture::GetValue(const std::string &logged_name)
         throw std::runtime_error("Unable to parse logged value '" + logged_name + "'");
     }
     return value;
+}
+
+template <typename T>
+std::vector<T> GTestCriteriaFixture::GetValueList(const std::string &logged_name)
+{
+    std::vector<std::string> logged_values = QueryLoggedValueList(logged_name);
+    std::vector<T> values;
+    for (const auto& value : logged_values) {
+        std::istringstream input(value);
+        T parsed_value{};
+        input >> parsed_value;
+        values.push_back(parsed_value);
+    }
+    return values;
 }
 
 #endif // GTEST_CRITERIA_FIXTURE_HPP
