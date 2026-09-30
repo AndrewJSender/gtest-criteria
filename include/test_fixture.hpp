@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Andrew J. Sender.
 // All rights reserved.
 
+#ifndef GTEST_CRITERIA_FIXTURE_HPP
+#define GTEST_CRITERIA_FIXTURE_HPP
+
 #include <gtest/gtest.h>
 #include <chrono>
 #include <cstdint>
@@ -78,3 +81,5 @@ T GTestCriteriaFixture::GetValue(const std::string &logged_name)
     }
     return value;
 }
+
+#endif // GTEST_CRITERIA_FIXTURE_HPP
