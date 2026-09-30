@@ -3,6 +3,9 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <thread>
+
 #include "parse_argument.hpp"
 #include "register_listener.hpp"
 #include "sql_test_event_listner.hpp"
@@ -12,7 +15,7 @@ class MyTestFixture : public GTestCriteriaFixture {
 protected:
     int test_function(int input_value) {
         // performing some operation before returning the result
-        sleep(input_value);
+        std::this_thread::sleep_for(std::chrono::seconds(input_value));
         return input_value * 2;
     }
 };
