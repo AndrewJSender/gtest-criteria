@@ -9,7 +9,7 @@ Quality is assessed across three dimensions: integrity,
 stability, and performance. Together, these pillars provide a broad view of
 the test suite's quality.
 
-![Diagram showing integrity, stability, and performance as the three pillars of quality](image.png)
+![Diagram showing integrity, stability, and performance as the three pillars of quality](docs/images/pillars.png)
 
 ## Explanation of Criteria
 
@@ -17,7 +17,7 @@ The diagram shows quality as the result of these three dimensions working
 together: integrity, stability, and performance each contribute to the overall
 assessment.
 
-![alt text](image-1.png)
+![alt text](docs/images/function_diagram.png)
 
 ## Dependencies
 
