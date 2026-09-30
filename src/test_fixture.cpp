@@ -17,11 +17,13 @@ namespace {
 const std::string kCriteriaSqlFile =
     std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
 const std::string kDisableExpectPerformantArgName = "--criteria_disable_expect_performant";
+const std::string kDisableExpectIntegrityArgName = "--criteria_disable_expect_integrity";
 
 }  // namespace
 
 std::unique_ptr<testing::SqlBackend> GTestCriteriaFixture::m_db;
 bool GTestCriteriaFixture::m_expect_performant_disabled = false;
+bool GTestCriteriaFixture::m_expect_integrity_disabled = false;
 
 void GTestCriteriaFixture::ConfigureSqlDb(std::optional<SqlOutput> arg) {
     m_db.reset();
@@ -131,19 +133,36 @@ void GTestCriteriaFixture::TearDown()
     const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
     const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
 
+    /** 
+     * We assume the difference between event listeners
+     * (:testing::EmptyTestEventListener::OnTestEnd - ::testing::EmptyTestEventListener::OnTestStart)
+     * is approximately the same difference between GTestCriteriaFixture::TearDown() - GTestCriteriaFixture::SetUp()
+     * for a given suite.test.
+     */
     EXPECT_PERFORMANT(test_stats, test_duration);
 }
 
-void GTestCriteriaFixture::ParseGtestDisableExpectPerformantArgument(int* argc, char* argv[]) {
-    int remove_count = 0;
+void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
+    int remove_count = 0; // not really used, but interesting to know
     for (int i = 1; i < *argc; ++i) {
         const std::string argument(argv[i]);
+        bool remove_argument = false;
         if (argument == kDisableExpectPerformantArgName) {
             m_expect_performant_disabled = true;
+            remove_argument = true;
+        } else if (argument == kDisableExpectIntegrityArgName) {
+            m_expect_integrity_disabled = true;
+            remove_argument = true;
+        }
+        if (remove_argument) {
+            // shift elements left to overwrite/remove the argument from argv
+            for (int j = i; j + 1 < *argc; ++j) {
+                argv[j] = argv[j + 1];
+            }
+            argv[*argc - 1] = nullptr; // set the last element to nullptr after shifting
+            --i; // adjust index to account for removed argument
+            *argc = *argc - 1;
             remove_count++;
-            argv[i] = argv[i+1];
-            i++;
         }
     }
-    *argc = *argc - remove_count;
 }

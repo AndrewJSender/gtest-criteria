@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <cstdint>
-#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -15,17 +14,18 @@ class GTestCriteriaFixture : public testing::Test
 {
 public:
     static void ConfigureSqlDb(std::optional<SqlOutput>);
-    static void ParseGtestDisableExpectPerformantArgument(int* argc, char* argv[]);
+    static void ParseDisableExpectArgument(int* argc, char* argv[]);
 protected:
     void SetUp() override;
     void TearDown() override;
 
+    static bool IsExpectIntegrityDisabled() { return m_expect_integrity_disabled; }
+    
     template <typename T>
     void LogValue(const std::string &logged_name, T value, int line_num = 0, std::string file = "");
 
     template <typename T>
     T GetValue(const std::string &logged_name);
-
 private:
     static std::string QueryLoggedValue(const std::string& logged_name);
 
@@ -51,6 +51,7 @@ private:
     std::chrono::high_resolution_clock::time_point test_timer;
     static std::unique_ptr<testing::SqlBackend> m_db;
     static bool m_expect_performant_disabled;
+    static bool m_expect_integrity_disabled;
 };
 
 template <typename T>
