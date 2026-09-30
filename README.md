@@ -75,8 +75,26 @@ To write test results to a SQLite database:
 ./build/example --gtest_output=sqlite:test_results.db
 ```
 
+To write test results to PostgreSQL, provide a libpq connection URI:
+
+```sh
+./build/example --gtest_output=postgresql://DB_HOST:5432/DB_NAME
+```
+
+To disable specific criteria checks for a run:
+
+```sh
+./build/example --criteria_disable_expect_performant
+./build/example --criteria_disable_expect_integrity
+```
+
+These options can be combined with SQL output and GoogleTest arguments. Do not
+commit connection URIs or credentials to source control.
+
 The SQL schema used by the listener is stored in
 `submodules/gtest_output-sql/sql/`.
+
+Note: Disabling the stability dimension would mean disabling the test itself.  This is why `criteria_disable_stability` does not exist.
 
 ## License
 
