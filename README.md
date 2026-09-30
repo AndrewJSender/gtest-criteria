@@ -9,7 +9,18 @@ Quality is assessed across three dimensions: integrity,
 stability, and performance. Together, these pillars provide a broad view of
 the test suite's quality.
 
-![Diagram showing integrity, stability, and performance as the three pillars of quality](docs/images/pillars.png)
+![Diagram showing integrity, stability, and performance as the three pillars of quality](docs/images/pillars.png) ![alt text](image.png)
+
+* **Integrity** means that tests produce the expected results and output. It
+  helps identify incorrect assertions, unexpected changes, and other signs
+  that a test no longer verifies the behavior it was intended to check.
+* **Stability** means that tests generally produce reliable output across
+  repeated runs. It focuses on whether a test behaves dependably over time
+  and helps expose flaky tests and intermittent failures, rather than whether
+  every output value is identical.
+* **Performance** means that tests complete within an acceptable and
+  predictable amount of time. Tracking execution duration helps identify
+  slowdowns and performance regressions.
 
 ## Explanation of Criteria
 
@@ -72,6 +83,16 @@ To write test results to PostgreSQL, provide a libpq connection URI:
 ```sh
 ./build/example --gtest_output=postgresql://DB_HOST:5432/DB_NAME
 ```
+
+### Historical test output
+
+The other benefit of `gtest_output-sql` is that it preserves test output in a
+database instead of limiting analysis to the current run. This creates a
+history of test results, logged values, and execution durations that can be
+compared over time. With that historical data, we can measure and monitor test
+integrity and performance: detect changes in expected output, identify tests
+whose behavior becomes inconsistent, and track regressions or improvements in
+runtime.
 
 To disable specific criteria checks for a run:
 
