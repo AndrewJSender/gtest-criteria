@@ -3,6 +3,22 @@
 This repository is a mock-up for evaluating stability, integration, and
 performance criteria in a GoogleTest-based test suite.
 
+## Three Pillars of Quality
+
+Quality is assessed across three dimensions: integrity,
+stability, and performance. Together, these pillars provide a broad view of
+the test suite's quality.
+
+![alt text](image.png)
+
+## Explanation of Criteria
+
+The diagram shows quality as the result of these three dimensions working
+together: integrity, stability, and performance each contribute to the overall
+assessment.
+
+![alt text](image-1.png)
+
 ## Dependencies
 
 The SQL output listener is included as the `gtest_output-sql` submodule. Its
@@ -61,3 +77,8 @@ To write test results to a SQLite database:
 
 The SQL schema used by the listener is stored in
 `submodules/gtest_output-sql/sql/`.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+details.
