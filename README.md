@@ -1,6 +1,6 @@
 # Google Test Criteria
 
-This repository is a mock-up for evaluating stability, integration, and
+This repository is a mock-up for evaluating stability, integrity, and
 performance criteria in a GoogleTest-based test suite.
 
 ## Three Pillars of Quality
@@ -9,7 +9,7 @@ Quality is assessed across three dimensions: integrity,
 stability, and performance. Together, these pillars provide a broad view of
 the test suite's quality.
 
-![alt text](image.png)
+![Diagram showing integrity, stability, and performance as the three pillars of quality](image.png)
 
 ## Explanation of Criteria
 
@@ -63,17 +63,9 @@ open build-xcode/gtest_criteria_example.xcodeproj
 
 ## Run
 
-Run the tests normally:
+Run the tests and write criteria data to a SQLite database:
 
-```sh
-./build/example
-```
-
-To write test results to a SQLite database:
-
-```sh
-./build/example --gtest_output=sqlite:test_results.db
-```
+    ./build/example --gtest_output=sqlite:test_results.db
 
 To write test results to PostgreSQL, provide a libpq connection URI:
 

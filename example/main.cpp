@@ -23,8 +23,8 @@ TEST_F(MyTestFixture, Test1) {
     std::string name = "result";
 
     GTEST_LOG_VALUE(name, result);
-    int expected_result = GetValue<int>(name);
     if (!IsExpectIntegrityDisabled()) {
+        int expected_result = GetValue<int>(name);
         EXPECT_EQ(result, expected_result);
     }
 }

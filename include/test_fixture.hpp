@@ -63,7 +63,7 @@ void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, int
     testing::Message msg;
     msg << logged_name << "=" << value;
     testing::TestPartResult::Type type = testing::TestPartResult::Type::kSuccess;
-    testing::internal::AssertHelper ah {type, file, line_num, ""};
+    testing::internal::AssertHelper ah {type, file.c_str(), line_num, ""};
     // =op calls the logging of test result part event
     ah = msg;
 }
