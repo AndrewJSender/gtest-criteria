@@ -68,68 +68,96 @@ GTestCriteriaFixture::DurationStats GTestCriteriaFixture::ComputeDurationStats(
     return stats;
 }
 
-std::vector<std::string> GTestCriteriaFixture::QueryLoggedValueList(const std::string& logged_name) {
-    if (m_db == nullptr) {
-        throw std::runtime_error("No SQL database is configured");
-    }
-
-    const testing::TestInfo* test_info =
-        testing::UnitTest::GetInstance()->current_test_info();
-    if (test_info == nullptr) {
-        throw std::runtime_error("GetValueList must be called while a test is running");
-    }
-
-    const std::string pattern = logged_name + "=%";
-    const auto rows = m_db->Query(
-        kCriteriaSqlFile.c_str(), "select_logged_value_list",
-        {test_info->test_suite_name(), test_info->name(), pattern}, {});
-    if (rows.empty()) {
-        throw std::runtime_error("No logged values found for '" + logged_name + "'");
-    }
-
-    std::vector<std::string> values;
-    const std::string prefix = logged_name + "=";
-    for (const auto& row : rows) {
-        if (row.empty()) { continue; }
-        const std::string& entry = row.front();
-        if (entry.rfind(prefix, 0) == 0) {
-            values.push_back(entry.substr(prefix.size()));
+std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedValueList(const std::string& logged_name) {
+    try {
+        if (m_db == nullptr) {
+            ADD_FAILURE() << "GetValueList('" << logged_name
+                          << "') returned nullopt: No SQL database is configured";
+            return std::nullopt;
         }
+
+        const testing::TestInfo* test_info =
+            testing::UnitTest::GetInstance()->current_test_info();
+        if (test_info == nullptr) {
+            ADD_FAILURE() << "GetValueList('" << logged_name
+                          << "') returned nullopt: GetValueList must be called while a test is running";
+            return std::nullopt;
+        }
+
+        const std::string pattern = logged_name + "=%";
+        const auto rows = m_db->Query(
+            kCriteriaSqlFile.c_str(), "select_logged_value_list",
+            {test_info->test_suite_name(), test_info->name(), pattern}, {});
+        if (rows.empty()) {
+            ADD_FAILURE() << "GetValueList('" << logged_name
+                          << "') returned nullopt: No logged values found";
+            return std::nullopt;
+        }
+
+        std::vector<std::string> values;
+        const std::string prefix = logged_name + "=";
+        for (const auto& row : rows) {
+            if (row.empty()) { continue; }
+            const std::string& entry = row.front();
+            if (entry.rfind(prefix, 0) == 0) {
+                values.push_back(entry.substr(prefix.size()));
+            }
+        }
+        if (values.empty()) {
+            ADD_FAILURE() << "GetValueList('" << logged_name
+                          << "') returned nullopt: logged values are empty";
+            return std::nullopt;
+        }
+        return values;
+    } catch (const std::exception& error) {
+        ADD_FAILURE() << "GetValueList('" << logged_name << "') returned nullopt: "
+                      << error.what();
+        return std::nullopt;
     }
-    if (values.empty()) {
-        throw std::runtime_error("Logged values for '" + logged_name + "' are empty");
-    }
-    return values;
 }
 
-std::string GTestCriteriaFixture::QueryLoggedValue(const std::string& logged_name) {
-    if (m_db == nullptr) {
-        throw std::runtime_error("No SQL database is configured");
-    }
+std::optional<std::string> GTestCriteriaFixture::QueryLoggedValue(const std::string& logged_name) {
+    try {
+        if (m_db == nullptr) {
+            ADD_FAILURE() << "GetValue('" << logged_name
+                          << "') returned nullopt: No SQL database is configured";
+            return std::nullopt;
+        }
 
-    const testing::TestInfo* test_info =
-        testing::UnitTest::GetInstance()->current_test_info();
-    if (test_info == nullptr) {
-        throw std::runtime_error("GetValue must be called while a test is running");
-    }
+        const testing::TestInfo* test_info =
+            testing::UnitTest::GetInstance()->current_test_info();
+        if (test_info == nullptr) {
+            ADD_FAILURE() << "GetValue('" << logged_name
+                          << "') returned nullopt: GetValue must be called while a test is running";
+            return std::nullopt;
+        }
 
-    const std::string pattern = logged_name + "=%";
-    const auto rows = m_db->Query(
-        kCriteriaSqlFile.c_str(), "select_logged_value",
-        {test_info->test_suite_name(), test_info->name(), pattern}, {});
-    if (rows.empty() || rows.front().empty()) {
-        throw std::runtime_error("No logged value found for '" + logged_name + "'");
-    }
+        const std::string pattern = logged_name + "=%";
+        const auto rows = m_db->Query(
+            kCriteriaSqlFile.c_str(), "select_logged_value",
+            {test_info->test_suite_name(), test_info->name(), pattern}, {});
+        if (rows.empty() || rows.front().empty()) {
+            ADD_FAILURE() << "GetValue('" << logged_name
+                          << "') returned nullopt: No logged value found";
+            return std::nullopt;
+        }
 
-    const std::string prefix = logged_name + "=";
-    const std::string value =
-        rows.front().front().rfind(prefix, 0) == 0
-            ? rows.front().front().substr(prefix.size())
-            : std::string();
-    if (value.empty()) {
-        throw std::runtime_error("Logged value '" + logged_name + "' is empty");
+        const std::string prefix = logged_name + "=";
+        const std::string value =
+            rows.front().front().rfind(prefix, 0) == 0
+                ? rows.front().front().substr(prefix.size())
+                : std::string();
+        if (value.empty()) {
+            ADD_FAILURE() << "GetValue('" << logged_name
+                          << "') returned nullopt: logged value is empty";
+            return std::nullopt;
+        }
+        return value;
+    } catch (const std::exception& error) {
+        ADD_FAILURE() << "GetValue('" << logged_name << "') returned nullopt: "
+                      << error.what();
+        return std::nullopt;
     }
-    return value;
 }
 
 void GTestCriteriaFixture::SetUp()

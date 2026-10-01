@@ -7,8 +7,8 @@
 #include <gtest/gtest.h>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -17,11 +17,11 @@
 
 #define EXPECT_THAT_AND_LOG(result, matcher) \
 std::string name = #result ; \
+auto gmock_matcher = matcher(name); \
 TestPartResultType result_type = TestPartResultType::kSuccess; \
-if (!IsExpectIntegrityDisabled()) { \
-    auto gtest_matcher = matcher(name); \
-    EXPECT_THAT(result, gtest_matcher); \
-    if (!::testing::Matcher<decltype(result)>(gtest_matcher).Matches(result)) { \
+if (!IsExpectIntegrityDisabled() && !gmock_matcher) { \
+    EXPECT_THAT(result, gmock_matcher); \
+    if (!::testing::Matcher<decltype(result)>(gmock_matcher).Matches(result)) { \
         result_type = TestPartResultType::kNonFatalFailure; \
     } \
 } \
@@ -42,13 +42,13 @@ protected:
     void LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type = testing::TestPartResult::Type::kSuccess, int line_num = 0, std::string file = "");
 
     template <typename T>
-    T GetValue(const std::string &logged_name);
+    std::optional<T> GetValue(const std::string &logged_name);
 
     template <typename T>
-    std::vector<T> GetValueList(const std::string &logged_name);
+    std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 private:
-    static std::string QueryLoggedValue(const std::string& logged_name);
-    static std::vector<std::string> QueryLoggedValueList(const std::string& logged_name);
+    static std::optional<std::string> QueryLoggedValue(const std::string& logged_name);
+    static std::optional<std::vector<std::string>> QueryLoggedValueList(const std::string& logged_name);
 
     // Mean and (population) standard deviation of `end_timestamp -
     // start_timestamp` across all completed rows of a table, in the same
@@ -86,28 +86,54 @@ void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, tes
 }
 
 template <typename T>
-T GTestCriteriaFixture::GetValue(const std::string &logged_name)
+std::optional<T> GTestCriteriaFixture::GetValue(const std::string &logged_name)
 {
-    std::istringstream input(QueryLoggedValue(logged_name));
-    T value{};
-    if (!(input >> value) || (input >> std::ws && !input.eof())) {
-        throw std::runtime_error("Unable to parse logged value '" + logged_name + "'");
+    try {
+        auto logged_value = QueryLoggedValue(logged_name);
+        if (!logged_value.has_value()) {
+            return std::nullopt;
+        }
+        std::istringstream input(*logged_value);
+        T value{};
+        if (!(input >> value) || (input >> std::ws, !input.eof())) {
+            ADD_FAILURE() << "GetValue('" << logged_name
+                          << "') returned nullopt: unable to parse logged value";
+            return std::nullopt;
+        }
+        return value;
+    } catch (const std::exception& error) {
+        ADD_FAILURE() << "GetValue('" << logged_name << "') returned nullopt: "
+                      << error.what();
+        return std::nullopt;
     }
-    return value;
 }
 
 template <typename T>
-std::vector<T> GTestCriteriaFixture::GetValueList(const std::string &logged_name)
+std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::string &logged_name)
 {
-    std::vector<std::string> logged_values = QueryLoggedValueList(logged_name);
-    std::vector<T> values;
-    for (const auto& value : logged_values) {
-        std::istringstream input(value);
-        T parsed_value{};
-        input >> parsed_value;
-        values.push_back(parsed_value);
+    try {
+        auto logged_values = QueryLoggedValueList(logged_name);
+        if (!logged_values.has_value()) {
+            return std::nullopt;
+        }
+        std::vector<T> values;
+        for (const auto& value : *logged_values) {
+            std::istringstream input(value);
+            T parsed_value{};
+            if (!(input >> parsed_value) || (input >> std::ws, !input.eof())) {
+                ADD_FAILURE() << "GetValueList('" << logged_name
+                              << "') returned nullopt: unable to parse logged value '"
+                              << value << "'";
+                return std::nullopt;
+            }
+            values.push_back(parsed_value);
+        }
+        return values;
+    } catch (const std::exception& error) {
+        ADD_FAILURE() << "GetValueList('" << logged_name << "') returned nullopt: "
+                      << error.what();
+        return std::nullopt;
     }
-    return values;
 }
 
 #endif // GTEST_CRITERIA_FIXTURE_HPP

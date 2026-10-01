@@ -7,6 +7,7 @@
 #include <chrono>
 #include <thread>
 #include <random>
+#include <optional>
 
 #include "parse_argument.hpp"
 #include "register_listener.hpp"
@@ -56,8 +57,13 @@ TEST_F(MyTestFixture, Test1) {
     int input_value = 1;
     // int input_value = 5;
     int result = test_int(input_value);
-    auto matcher = [this](std::string name) {
-        return ::testing::Eq(GetValue<int>(name));
+    std::option<::testing::Matcher> matcher = [this](std::string name) {
+        std::optional<int> expected = GetValue<int>(name);
+        if (expected.has_value()) {
+            return ::testing::Eq(expected.value());
+        } else {
+            return std::nullopt;
+        }
     };
     EXPECT_THAT_AND_LOG(result, matcher);
 }
@@ -68,10 +74,16 @@ TEST_F(MyTestFixture, Test2) {
     float stdev = 1.0f;
     float result = test_normal_dist(input_mean, stdev);
     auto matcher = [this, c_stdev = stdev](std::string name) {
-        std::vector<float> values_list = GetValueList<float>(name);
-        float expected_avg, expected_stdev;
-        std::tie(expected_avg, expected_stdev) = test_mean_and_stdev(values_list);
-        return ::testing::FloatNear(expected_avg, 3*c_stdev);
+        auto values_list = GetValueList<float>(name);
+        return ::testing::Truly([this, values_list, c_stdev](float actual) {
+            if (!values_list.has_value()) {
+                return false;
+            }
+            float expected_avg, expected_stdev;
+            std::tie(expected_avg, expected_stdev) =
+                test_mean_and_stdev(*values_list);
+            return std::abs(actual - expected_avg) <= 3 * c_stdev;
+        });
     };
     EXPECT_THAT_AND_LOG(result, matcher);
 }
