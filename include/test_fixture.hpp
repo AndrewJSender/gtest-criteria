@@ -19,9 +19,9 @@
 std::string name = #result ; \
 auto gmock_matcher = matcher(name); \
 TestPartResultType result_type = TestPartResultType::kSuccess; \
-if (!IsExpectIntegrityDisabled() && !gmock_matcher) { \
-    EXPECT_THAT(result, gmock_matcher); \
-    if (!::testing::Matcher<decltype(result)>(gmock_matcher).Matches(result)) { \
+if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) { \
+    EXPECT_THAT(result, *gmock_matcher); \
+    if (!::testing::Matcher<decltype(result)>(*gmock_matcher).Matches(result)) { \
         result_type = TestPartResultType::kNonFatalFailure; \
     } \
 } \
