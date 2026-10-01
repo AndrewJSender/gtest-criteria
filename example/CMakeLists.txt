@@ -69,7 +69,7 @@ target_compile_definitions(example PRIVATE
 target_link_libraries(example PRIVATE
   sqlite
   PostgreSQL::PostgreSQL
-  gtest
+  gmock
 )
 
 # XCode specific settings

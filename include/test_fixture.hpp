@@ -15,7 +15,17 @@
 #include "parse_argument.hpp"
 #include "sql_backend.hpp"
 
-#define GTEST_LOG_VALUE(name, value, result_type) LogValue(name, value, result_type, __LINE__ , __FILE__)
+#define EXPECT_THAT_AND_LOG(result, matcher) \
+std::string name = #result ; \
+TestPartResultType result_type = TestPartResultType::kSuccess; \
+if (!IsExpectIntegrityDisabled()) { \
+    auto gtest_matcher = matcher(name); \
+    EXPECT_THAT(result, gtest_matcher); \
+    if (!::testing::Matcher<decltype(result)>(gtest_matcher).Matches(result)) { \
+        result_type = TestPartResultType::kNonFatalFailure; \
+    } \
+} \
+LogValue(name, result, result_type, __LINE__ , __FILE__);
 
 class GTestCriteriaFixture : public testing::Test
 {

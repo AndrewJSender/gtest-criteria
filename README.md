@@ -1,7 +1,6 @@
 # Google Test Criteria
 
-This repository is a mock-up for evaluating stability, integrity, and
-performance criteria in a GoogleTest-based test suite.
+This repository provides the test criteria in a GoogleTest-based test suite.
 
 ## Three Pillars of Quality
 

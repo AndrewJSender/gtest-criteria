@@ -2,6 +2,7 @@
 // All rights reserved.
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <chrono>
 #include <thread>
@@ -55,37 +56,24 @@ TEST_F(MyTestFixture, Test1) {
     int input_value = 1;
     // int input_value = 5;
     int result = test_int(input_value);
-    std::string name = "result";
-    
-    TestPartResultType result_type = TestPartResultType::kSuccess;
-    if (!IsExpectIntegrityDisabled()) {
-        int expected_result = GetValue<int>(name);
-        EXPECT_EQ(result, expected_result);
-        if (result != expected_result) {
-            result_type = TestPartResultType::kNonFatalFailure;
-        }
-    }
-    GTEST_LOG_VALUE(name, result, result_type);
+    auto matcher = [this](std::string name) {
+        return ::testing::Eq(GetValue<int>(name));
+    };
+    EXPECT_THAT_AND_LOG(result, matcher);
 }
 
 TEST_F(MyTestFixture, Test2) {
-    // float input_mean = 0.0f;
-    float input_mean = 5.0f;
+    float input_mean = 0.0f;
+    // float input_mean = 10.0f;
     float stdev = 1.0f;
     float result = test_normal_dist(input_mean, stdev);
-    std::string name = "result";
-
-    TestPartResultType result_type = TestPartResultType::kSuccess;
-    if (!IsExpectIntegrityDisabled()) {
+    auto matcher = [this, c_stdev = stdev](std::string name) {
         std::vector<float> values_list = GetValueList<float>(name);
         float expected_avg, expected_stdev;
         std::tie(expected_avg, expected_stdev) = test_mean_and_stdev(values_list);
-        EXPECT_NEAR(input_mean, expected_avg, 3*stdev);
-        if (std::abs(input_mean - expected_avg) > 3*stdev) {
-            result_type = TestPartResultType::kNonFatalFailure;
-        }
-    }
-    GTEST_LOG_VALUE(name, result, result_type);
+        return ::testing::FloatNear(expected_avg, 3*c_stdev);
+    };
+    EXPECT_THAT_AND_LOG(result, matcher);
 }
 
 int main(int argc, char* argv[]) {
