@@ -47,8 +47,25 @@ protected:
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 private:
-    static std::optional<std::string> QueryLoggedValue(const std::string& logged_name);
-    static std::optional<std::vector<std::string>> QueryLoggedValueList(const std::string& logged_name);
+    // Runs `sql_key` (one of "select_logged_value" or
+    // "select_logged_value_list") against the current test's logged
+    // "name=value" entries matching `logged_name`, and returns the values
+    // with the "name=" prefix stripped. Returns std::nullopt if no database
+    // is configured, no test is running, or no matching values are found.
+    static std::optional<std::vector<std::string>> QueryLoggedEntries(
+        const std::string& sql_key, const std::string& logged_name);
+
+    // Parses `raw` as a single value of type T, requiring the entire
+    // string to be consumed. Returns std::nullopt if parsing fails.
+    template <typename T>
+    static std::optional<T> ParseLoggedValue(const std::string& raw);
+
+    // Shared implementation for GetValue(List): queries entries via
+    // `sql_key` (see QueryLoggedEntries) and parses each one as a T.
+    // Returns std::nullopt if the query finds nothing or any entry fails to
+    // parse.
+    template <typename T>
+    static std::optional<std::vector<T>> GetValues(const std::string& sql_key, const std::string& logged_name);
 
     // Mean and (population) standard deviation of `end_timestamp -
     // start_timestamp` across all completed rows of a table, in the same
@@ -86,52 +103,57 @@ void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, tes
 }
 
 template <typename T>
-std::optional<T> GTestCriteriaFixture::GetValue(const std::string &logged_name)
+std::optional<T> GTestCriteriaFixture::ParseLoggedValue(const std::string& raw)
+{
+    std::istringstream input(raw);
+    T value{};
+    if (!(input >> value) || (input >> std::ws, !input.eof())) {
+        std::ostringstream msg; msg << "Failed to parse logged value: " << raw;
+        return std::nullopt;
+    }
+    return value;
+}
+
+template <typename T>
+std::optional<std::vector<T>> GTestCriteriaFixture::GetValues(const std::string& sql_key, const std::string& logged_name)
 {
     try {
-        auto logged_value = QueryLoggedValue(logged_name);
-        if (!logged_value.has_value()) {
+        auto logged_values = QueryLoggedEntries(sql_key, logged_name);
+        if (!logged_values.has_value()) {
+            std::ostringstream msg; msg << "No logged values returned for SQL key " << sql_key << " and logged name " << logged_name;
             return std::nullopt;
         }
-        std::istringstream input(*logged_value);
-        T value{};
-        if (!(input >> value) || (input >> std::ws, !input.eof())) {
-            std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: unable to parse logged value";
-            return std::nullopt;
+        std::vector<T> values;
+        for (const auto& value : *logged_values) {
+            auto parsed_value = ParseLoggedValue<T>(value);
+            if (!parsed_value.has_value()) {
+                std::ostringstream msg; msg << "Failed to parse logged value: " << value;
+                return std::nullopt;
+            }
+            values.push_back(*parsed_value);
         }
-        return value;
-    } catch (const std::exception& error) {
-        std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: " << error.what();
+        return values;
+    } catch (const std::exception& e) {
+        std::ostringstream msg; msg << e.what();
         return std::nullopt;
     }
 }
 
 template <typename T>
-std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::string &logged_name)
+std::optional<T> GTestCriteriaFixture::GetValue(const std::string &logged_name)
 {
-    try {
-        auto logged_values = QueryLoggedValueList(logged_name);
-        if (!logged_values.has_value()) {
-            return std::nullopt;
-        }
-        std::vector<T> values;
-        for (const auto& value : *logged_values) {
-            std::istringstream input(value);
-            T parsed_value{};
-            if (!(input >> parsed_value) || (input >> std::ws, !input.eof())) {
-                std::ostringstream msg; msg << "GetValueList('" << logged_name
-                              << "') returned nullopt: unable to parse logged value '"
-                              << value << "'";
-                return std::nullopt;
-            }
-            values.push_back(parsed_value);
-        }
-        return values;
-    } catch (const std::exception& error) {
-        std::ostringstream msg; msg << "GetValueList('" << logged_name << "') returned nullopt: "
-                      << error.what();
+    auto values = GetValues<T>("select_logged_value", logged_name);
+    if (!values.has_value() || values->empty()) {
+        std::ostringstream msg; msg << "No values returned for logged name " << logged_name;
         return std::nullopt;
     }
+    return values->front();
+}
+
+template <typename T>
+std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::string &logged_name)
+{
+    return GetValues<T>("select_logged_value_list", logged_name);
 }
 
 #endif // GTEST_CRITERIA_FIXTURE_HPP

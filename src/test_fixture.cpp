@@ -68,29 +68,27 @@ GTestCriteriaFixture::DurationStats GTestCriteriaFixture::ComputeDurationStats(
     return stats;
 }
 
-std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedValueList(const std::string& logged_name) {
+std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries(
+    const std::string& sql_key, const std::string& logged_name) {
     try {
         if (m_db == nullptr) {
-            std::ostringstream msg; msg << "GetValueList('" << logged_name
-                          << "') returned nullopt: No SQL database is configured";
+            std::ostringstream msg; msg << "No SQL database configured.";
             return std::nullopt;
         }
 
         const testing::TestInfo* test_info =
             testing::UnitTest::GetInstance()->current_test_info();
         if (test_info == nullptr) {
-            std::ostringstream msg; msg << "GetValueList('" << logged_name
-                          << "') returned nullopt: GetValueList must be called while a test is running";
+            std::ostringstream msg; msg << "No current test running.";
             return std::nullopt;
         }
 
         const std::string pattern = logged_name + "=%";
         const auto rows = m_db->Query(
-            kCriteriaSqlFile.c_str(), "select_logged_value_list",
+            kCriteriaSqlFile.c_str(), sql_key.c_str(),
             {test_info->test_suite_name(), test_info->name(), pattern}, {});
         if (rows.empty()) {
-            std::ostringstream msg; msg << "GetValueList('" << logged_name
-                          << "') returned nullopt: No logged values found";
+            std::ostringstream msg; msg << "No rows returned for SQL key " << sql_key << " and logged name " << logged_name;
             return std::nullopt;
         }
 
@@ -104,54 +102,12 @@ std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedValueLi
             }
         }
         if (values.empty()) {
-            std::ostringstream msg; msg << "GetValueList('" << logged_name
-                          << "') returned nullopt: logged values are empty";
+            std::ostringstream msg; msg << "No matching logged entries for " << logged_name;
             return std::nullopt;
         }
         return values;
-    } catch (const std::exception& error) {
-        std::ostringstream msg; msg << "GetValueList('" << logged_name << "') returned nullopt: "
-                      << error.what();
-        return std::nullopt;
-    }
-}
-
-std::optional<std::string> GTestCriteriaFixture::QueryLoggedValue(const std::string& logged_name) {
-    try {
-        if (m_db == nullptr) {
-            std::ostringstream msg; msg << "GetValue('" << logged_name
-                          << "') returned nullopt: No SQL database is configured";
-            return std::nullopt;
-        }
-
-        const testing::TestInfo* test_info =
-            testing::UnitTest::GetInstance()->current_test_info();
-        if (test_info == nullptr) {
-            std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: GetValue must be called while a test is running";
-            return std::nullopt;
-        }
-
-        const std::string pattern = logged_name + "=%";
-        const auto rows = m_db->Query(
-            kCriteriaSqlFile.c_str(), "select_logged_value",
-            {test_info->test_suite_name(), test_info->name(), pattern}, {});
-        if (rows.empty() || rows.front().empty()) {
-            std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: No logged value found";
-            return std::nullopt;
-        }
-
-        const std::string prefix = logged_name + "=";
-        const std::string value =
-            rows.front().front().rfind(prefix, 0) == 0
-                ? rows.front().front().substr(prefix.size())
-                : std::string();
-        if (value.empty()) {
-            std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: logged value is empty";
-            return std::nullopt;
-        }
-        return value;
-    } catch (const std::exception& error) {
-        std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: " << error.what();
+    } catch (const std::exception& e) {
+        std::ostringstream msg; msg << e.what();
         return std::nullopt;
     }
 }
