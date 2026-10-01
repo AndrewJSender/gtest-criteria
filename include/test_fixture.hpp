@@ -96,14 +96,12 @@ std::optional<T> GTestCriteriaFixture::GetValue(const std::string &logged_name)
         std::istringstream input(*logged_value);
         T value{};
         if (!(input >> value) || (input >> std::ws, !input.eof())) {
-            ADD_FAILURE() << "GetValue('" << logged_name
-                          << "') returned nullopt: unable to parse logged value";
+            std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: unable to parse logged value";
             return std::nullopt;
         }
         return value;
     } catch (const std::exception& error) {
-        ADD_FAILURE() << "GetValue('" << logged_name << "') returned nullopt: "
-                      << error.what();
+        std::ostringstream msg; msg << "GetValue('" << logged_name << "') returned nullopt: " << error.what();
         return std::nullopt;
     }
 }
@@ -121,7 +119,7 @@ std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::stri
             std::istringstream input(value);
             T parsed_value{};
             if (!(input >> parsed_value) || (input >> std::ws, !input.eof())) {
-                ADD_FAILURE() << "GetValueList('" << logged_name
+                std::ostringstream msg; msg << "GetValueList('" << logged_name
                               << "') returned nullopt: unable to parse logged value '"
                               << value << "'";
                 return std::nullopt;
@@ -130,7 +128,7 @@ std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::stri
         }
         return values;
     } catch (const std::exception& error) {
-        ADD_FAILURE() << "GetValueList('" << logged_name << "') returned nullopt: "
+        std::ostringstream msg; msg << "GetValueList('" << logged_name << "') returned nullopt: "
                       << error.what();
         return std::nullopt;
     }
