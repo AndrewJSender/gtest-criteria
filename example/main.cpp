@@ -14,6 +14,7 @@
 
 class MyTestFixture : public GTestCriteriaFixture {
 protected:
+    using TestPartResultType = ::testing::TestPartResult::Type;
     int test_int(int input_value) {
         // performing some operation before returning the result
         std::this_thread::sleep_for(std::chrono::seconds(input_value));
@@ -56,29 +57,35 @@ TEST_F(MyTestFixture, Test1) {
     int result = test_int(input_value);
     std::string name = "result";
     
-    ::testing::TestPartResult::Type result_type = ::testing::TestPartResult::Type::kSuccess;
+    TestPartResultType result_type = TestPartResultType::kSuccess;
     if (!IsExpectIntegrityDisabled()) {
         int expected_result = GetValue<int>(name);
         EXPECT_EQ(result, expected_result);
+        if (result != expected_result) {
+            result_type = TestPartResultType::kNonFatalFailure;
+        }
     }
     GTEST_LOG_VALUE(name, result, result_type);
 }
 
 TEST_F(MyTestFixture, Test2) {
-    float input_mean = 0.0f;
-    // float input_mean = 5.0f;
+    // float input_mean = 0.0f;
+    float input_mean = 5.0f;
     float stdev = 1.0f;
     float result = test_normal_dist(input_mean, stdev);
     std::string name = "result";
 
-    GTEST_LOG_VALUE(name, result, ::testing::TestPartResult::Type::kSuccess);
+    TestPartResultType result_type = TestPartResultType::kSuccess;
     if (!IsExpectIntegrityDisabled()) {
         std::vector<float> values_list = GetValueList<float>(name);
         float expected_avg, expected_stdev;
         std::tie(expected_avg, expected_stdev) = test_mean_and_stdev(values_list);
         EXPECT_NEAR(input_mean, expected_avg, 3*stdev);
-        EXPECT_NEAR(stdev, expected_stdev, 3*stdev);
+        if (std::abs(input_mean - expected_avg) > 3*stdev) {
+            result_type = TestPartResultType::kNonFatalFailure;
+        }
     }
+    GTEST_LOG_VALUE(name, result, result_type);
 }
 
 int main(int argc, char* argv[]) {

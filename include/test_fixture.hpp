@@ -57,7 +57,7 @@ private:
     static DurationStats ComputeDurationStats(const std::string& suite_name,
                                               const std::string& test_name);
 
-    static void EXPECT_PERFORMANT(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration);
+    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration);
 
     std::chrono::high_resolution_clock::time_point test_timer;
     static std::unique_ptr<testing::SqlBackend> m_db;

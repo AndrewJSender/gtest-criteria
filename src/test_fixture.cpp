@@ -137,7 +137,7 @@ void GTestCriteriaFixture::SetUp()
     test_timer = std::chrono::high_resolution_clock::now();
 }
 
-void GTestCriteriaFixture::EXPECT_PERFORMANT(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration)
+void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration)
 {
     if (stats.count == 0) { return; }
     
@@ -160,7 +160,7 @@ void GTestCriteriaFixture::TearDown()
      * is approximately the same difference between GTestCriteriaFixture::TearDown() - GTestCriteriaFixture::SetUp()
      * for a given suite.test.
      */
-    EXPECT_PERFORMANT(test_stats, test_duration);
+    expect_performant(test_stats, test_duration);
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
