@@ -4,6 +4,7 @@
 #ifndef GTEST_CRITERIA_FIXTURE_HPP
 #define GTEST_CRITERIA_FIXTURE_HPP
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <chrono>
