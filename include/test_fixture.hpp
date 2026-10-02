@@ -19,8 +19,8 @@
 
 #define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
 
-#define EXPECT_THAT_AND_LOG(result, matcher) \
-    expect_that_and_log(result, #result, matcher, __FILE__, __LINE__)
+#define EXPECT_THAT_AND_LOG(result, matcher_lambda) \
+    expect_that_and_log(result, #result, matcher_lambda(#result), __FILE__, __LINE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
