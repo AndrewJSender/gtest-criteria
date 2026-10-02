@@ -100,9 +100,9 @@ To disable specific criteria checks for a run:
 ./build/example --criteria_disable_expect_integrity
 ```
 
-`GetValueList<T>` return `std::optional<std::vector<T>>`. `GetValueList` returns every value logged under that name, in the order
+`GetValueList<T>` returns `std::optional<std::vector<T>>`. `GetValueList` returns every value logged under that name, in the order
 they were logged. If no SQL database is configured, no matching value has
-been logged, or the logged value cannot be parsed as `T`, they return
+been logged, or the logged value cannot be parsed as `T`, it returns
 `std::nullopt` without recording a GoogleTest failure.
 
 These options can be combined with SQL output and GoogleTest arguments. Do not
