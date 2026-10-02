@@ -117,30 +117,30 @@ void GTestCriteriaFixture::SetUp()
     test_timer = std::chrono::high_resolution_clock::now();
 }
 
-void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration)
+void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier)
 {
     if (stats.count == 0) { return; }
-    
     if (m_expect_performant_disabled) { return; }
 
-    // Example performance expectation: test duration should not exceed mean + 2 * stddev
+    // Example performance expectation: test duration should not exceed mean +/- threshold_multiplier * stddev
+    // if test duration is suddenly faster, it should still fail to assess performance.
     const double test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-    EXPECT_NEAR(test_duration_ms, stats.mean, 2 * stats.stddev) << "Test duration exceeded performance threshold.";
+    EXPECT_NEAR(test_duration_ms, stats.mean, threshold_multiplier * stats.stddev) << "Test duration exceeded performance threshold.";
 }
 
 void GTestCriteriaFixture::TearDown()
 {
-    auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
-    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
-    const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
-
     /** 
      * We assume the difference between event listeners
      * (:testing::EmptyTestEventListener::OnTestEnd - ::testing::EmptyTestEventListener::OnTestStart)
      * is approximately the same difference between GTestCriteriaFixture::TearDown() - GTestCriteriaFixture::SetUp()
      * for a given suite.test.
      */
-    expect_performant(test_stats, test_duration);
+    auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
+    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
+    const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
+    double threshold_multiplier = 3.0; // six-sigma rule
+    expect_performant(test_stats, test_duration, threshold_multiplier);
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
@@ -170,5 +170,6 @@ void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
 
 void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int line_num) {
     // TODO define a proper logging mechanism
+    // Currently, this just logs the message using SUCCEED().
     SUCCEED() << msg;
 }

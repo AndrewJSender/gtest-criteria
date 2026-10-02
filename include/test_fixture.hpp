@@ -86,7 +86,7 @@ private:
     static DurationStats ComputeDurationStats(const std::string& suite_name,
                                               const std::string& test_name);
 
-    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration);
+    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier);
 
     static void log_internally(std::string msg, std::string file_name, int line_num);
     
