@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Andrew J. Sender.
+// All rights reserved.
+
 template <typename T>
 void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num)
 {

@@ -108,11 +108,11 @@ been logged, or the logged value cannot be parsed as `T`, it returns
 These options can be combined with SQL output and GoogleTest arguments. Do not
 commit connection URIs or credentials to source control.
 
-`EXPECT_THAT_AND_LOG(result, matcher)` accepts an
-`std::optional<::testing::Matcher<T>>`, where `T` is the result type. If a
-lambda produces the optional matcher from historical values, invoke it with
-the logged name: `EXPECT_THAT_AND_LOG(result, matcher("result"))`. An empty
-optional skips the integrity assertion but still logs the result.
+`EXPECT_THAT_AND_LOG(result, matcher_lambda)` accepts a callable that takes the
+logged name and returns `std::optional<::testing::Matcher<T>>`, where `T` is
+the result type. Pass the callable directly, as in
+`EXPECT_THAT_AND_LOG(result, matcher)`. An empty optional skips the integrity
+assertion but still logs the result.
 
 The SQL schema used by the listener is stored in
 `submodules/gtest_output-sql/sql/`.

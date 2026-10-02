@@ -128,7 +128,7 @@ void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::h
     if (std::abs(test_duration_ms - stats.mean) < min_difference) {
         return;
     }
-    EXPECT_NEAR(test_duration_ms, stats.mean, threshold_multiplier * stats.stddev) << "Test duration exceeded performance threshold.";
+    EXPECT_NEAR(test_duration_ms, stats.mean, threshold_multiplier * stats.stddev) << "Test duration deviated beyond the performance threshold.";
 }
 
 void GTestCriteriaFixture::TearDown()
