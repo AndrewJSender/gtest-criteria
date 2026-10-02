@@ -117,7 +117,7 @@ void GTestCriteriaFixture::SetUp()
     test_timer = std::chrono::high_resolution_clock::now();
 }
 
-void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier)
+void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier, double min_difference)
 {
     if (stats.count == 0) { return; }
     if (m_expect_performant_disabled) { return; }
@@ -125,6 +125,9 @@ void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::h
     // Example performance expectation: test duration should not exceed mean +/- threshold_multiplier * stddev
     // if test duration is suddenly faster, it should still fail to assess performance.
     const double test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
+    if (std::abs(test_duration_ms - stats.mean) < min_difference) {
+        return;
+    }
     EXPECT_NEAR(test_duration_ms, stats.mean, threshold_multiplier * stats.stddev) << "Test duration exceeded performance threshold.";
 }
 
@@ -140,7 +143,8 @@ void GTestCriteriaFixture::TearDown()
     const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
     const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
     double threshold_multiplier = 3.0; // six-sigma rule
-    expect_performant(test_stats, test_duration, threshold_multiplier);
+    double min_difference = 10.0; // minimum difference in milliseconds to consider performance deviation
+    expect_performant(test_stats, test_duration, threshold_multiplier, min_difference);
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {

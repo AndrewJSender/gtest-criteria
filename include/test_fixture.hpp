@@ -40,22 +40,19 @@ protected:
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 
     template <typename T>
-    void expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num) {
-        using TestPartResultType = ::testing::TestPartResult::Type;
-        TestPartResultType result_type = TestPartResultType::kSuccess;
-        if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) {
-            EXPECT_THAT(result, *gmock_matcher);
-            if (!::testing::Matcher<T>(*gmock_matcher).Matches(result)) {
-                result_type = TestPartResultType::kNonFatalFailure;
-            }
-        }
-        LogValue(result_name, result, result_type , file_name, line_num);
-    }
+    void expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num);
 private:
     // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values
     // with the "name=" prefix stripped. Returns std::nullopt if no database
     // is configured, no test is running, or no matching values are found.
+    /**
+     * @brief Queries the SQL database for logged entries matching the given key and name.
+     * 
+     * @param sql_key The SQL key to query.
+     * @param logged_name The name of the logged entries to retrieve.
+     * @return std::optional<std::vector<std::string>> A vector of matching logged values with the "name=" prefix stripped, or std::nullopt if no matching entries are found.
+     */
     static std::optional<std::vector<std::string>> QueryLoggedEntries(const std::string& sql_key, const std::string& logged_name);
 
     // Parses `raw` as a single value of type T, requiring the entire
@@ -86,8 +83,23 @@ private:
     static DurationStats ComputeDurationStats(const std::string& suite_name,
                                               const std::string& test_name);
 
-    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier);
+    /**
+     * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
+     * 
+     * @param stats The duration statistics to compare against.
+     * @param test_duration The actual duration of the test.
+     * @param threshold_multiplier The multiplier for the standard deviation to define the acceptable performance range.
+     * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
+     */
+    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier, double min_difference);
 
+    /**
+     * @brief Logs a message internally, typically for test results.
+     * 
+     * @param msg The message to log.
+     * @param file_name The name of the source file where the log is generated.
+     * @param line_num The line number in the source file where the log is generated.
+     */
     static void log_internally(std::string msg, std::string file_name, int line_num);
     
     std::chrono::high_resolution_clock::time_point test_timer;
@@ -148,6 +160,19 @@ template <typename T>
 std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::string &logged_name)
 {
     return GetValues<T>("select_logged_value_list", logged_name);
+}
+
+template <typename T>
+void GTestCriteriaFixture::expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num) {
+    using TestPartResultType = ::testing::TestPartResult::Type;
+    TestPartResultType result_type = TestPartResultType::kSuccess;
+    if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) {
+        EXPECT_THAT(result, *gmock_matcher);
+        if (!::testing::Matcher<T>(*gmock_matcher).Matches(result)) {
+            result_type = TestPartResultType::kNonFatalFailure;
+        }
+    }
+    LogValue(result_name, result, result_type , file_name, line_num);
 }
 
 #endif // GTEST_CRITERIA_FIXTURE_HPP
