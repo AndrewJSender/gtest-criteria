@@ -15,8 +15,7 @@
 
 namespace {
 
-const std::string kCriteriaSqlFile =
-    std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
+const std::string kCriteriaSqlFile = std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
 const std::string kDisableExpectPerformantArgName = "--criteria_disable_expect_performant";
 const std::string kDisableExpectIntegrityArgName = "--criteria_disable_expect_integrity";
 
@@ -69,78 +68,83 @@ GTestCriteriaFixture::DurationStats GTestCriteriaFixture::ComputeDurationStats(
     return stats;
 }
 
-std::string GTestCriteriaFixture::QueryLoggedValue(const std::string& logged_name) {
-    if (m_db == nullptr) {
-        throw std::runtime_error("No SQL database is configured");
-    }
+std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries(
+    const std::string& sql_key, const std::string& logged_name) {
+    try {
+        if (m_db == nullptr) {
+            LOG_MSG("No SQL database configured.");
+            return std::nullopt;
+        }
 
-    const testing::TestInfo* test_info =
-        testing::UnitTest::GetInstance()->current_test_info();
-    if (test_info == nullptr) {
-        throw std::runtime_error("GetValue must be called while a test is running");
-    }
+        const testing::TestInfo* test_info =
+            testing::UnitTest::GetInstance()->current_test_info();
+        if (test_info == nullptr) {
+            LOG_MSG("No current test running.");
+            return std::nullopt;
+        }
 
-    const std::string pattern = logged_name + "=%";
-    const auto rows = m_db->Query(
-        kCriteriaSqlFile.c_str(), "select_logged_value",
-        {test_info->test_suite_name(), test_info->name(), pattern}, {});
-    if (rows.empty() || rows.front().empty()) {
-        throw std::runtime_error("No logged value found for '" + logged_name + "'");
-    }
+        const std::string pattern = logged_name + "=%";
+        const auto rows = m_db->Query(
+            kCriteriaSqlFile.c_str(), sql_key.c_str(),
+            {test_info->test_suite_name(), test_info->name(), pattern}, {});
+        if (rows.empty()) {
+            LOG_MSG("No rows returned for SQL key " + sql_key + " and logged name " + logged_name);
+            return std::nullopt;
+        }
 
-    const std::string prefix = logged_name + "=";
-    const std::string value =
-        rows.front().front().rfind(prefix, 0) == 0
-            ? rows.front().front().substr(prefix.size())
-            : std::string();
-    if (value.empty()) {
-        throw std::runtime_error("Logged value '" + logged_name + "' is empty");
+        std::vector<std::string> values;
+        const std::string prefix = logged_name + "=";
+        for (const auto& row : rows) {
+            if (row.empty()) { continue; }
+            const std::string& entry = row.front();
+            if (entry.rfind(prefix, 0) == 0) {
+                values.push_back(entry.substr(prefix.size()));
+            }
+        }
+        if (values.empty()) {
+            LOG_MSG("No matching logged entries for " + logged_name);
+            return std::nullopt;
+        }
+        return values;
+    } catch (const std::exception& e) {
+        LOG_MSG(std::string("Exception caught: ") + e.what());
+        return std::nullopt;
     }
-    return value;
 }
-
-
 
 void GTestCriteriaFixture::SetUp()
 {
     test_timer = std::chrono::high_resolution_clock::now();
 }
 
-void GTestCriteriaFixture::EXPECT_PERFORMANT(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration)
+void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier, double min_difference)
 {
-    if (stats.count == 0) {
-        return;
-    }
-    
-    if (m_expect_performant_disabled) {
-        return;
-    }
+    if (stats.count == 0) { return; }
+    if (m_expect_performant_disabled) { return; }
 
-    // Example performance expectation: test duration should not exceed mean + 2 * stddev
-    const double threshold_ms = stats.mean + 2 * stats.stddev;
-    std::string values_str = std::to_string(stats.mean) + " + 2 * " + std::to_string(stats.stddev);
+    // Example performance expectation: test duration should not exceed mean +/- threshold_multiplier * stddev
+    // if test duration is suddenly faster, it should still fail to assess performance.
     const double test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-    EXPECT_LE(test_duration_ms, threshold_ms)
-    << "Test duration exceeded performance threshold."
-    <<  std::endl
-    << "stats.mean + 2 * stats.stddev = " << values_str;
+    if (std::abs(test_duration_ms - stats.mean) < min_difference) {
+        return;
+    }
+    EXPECT_NEAR(test_duration_ms, stats.mean, threshold_multiplier * stats.stddev) << "Test duration deviated beyond the performance threshold.";
 }
 
 void GTestCriteriaFixture::TearDown()
 {
-    auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
-    const auto test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-
-    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
-    const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
-
     /** 
      * We assume the difference between event listeners
      * (:testing::EmptyTestEventListener::OnTestEnd - ::testing::EmptyTestEventListener::OnTestStart)
      * is approximately the same difference between GTestCriteriaFixture::TearDown() - GTestCriteriaFixture::SetUp()
      * for a given suite.test.
      */
-    EXPECT_PERFORMANT(test_stats, test_duration);
+    auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
+    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
+    const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
+    double threshold_multiplier = 3.0; // six-sigma rule
+    double min_difference = 10.0; // minimum difference in milliseconds to consider performance deviation
+    expect_performant(test_stats, test_duration, threshold_multiplier, min_difference);
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
@@ -166,4 +170,10 @@ void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
             remove_count++;
         }
     }
+}
+
+void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int line_num) {
+    // TODO define a proper logging mechanism
+    // Currently, this just logs the message using SUCCEED().
+    SUCCEED() << msg;
 }

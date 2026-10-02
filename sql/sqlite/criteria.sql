@@ -1,13 +1,13 @@
 -- Copyright (c) 2026 Andrew J. Sender.
 -- All rights reserved.
 
--- select_logged_value
+-- select_logged_value_list
 SELECT part.message
 FROM test_result_part AS part
 JOIN test ON part.test_id = test.id
 JOIN suite ON test.suite_id = suite.id
 WHERE suite.name = ? AND test.name = ? AND part.type = 'success' AND part.message LIKE ?
-ORDER BY part.id ASC LIMIT 1;
+ORDER BY part.id ASC;
 
 -- select_test_durations
 SELECT AVG(duration), AVG(duration * duration), COUNT(*)

@@ -1,7 +1,6 @@
 # Google Test Criteria
 
-This repository is a mock-up for evaluating stability, integrity, and
-performance criteria in a GoogleTest-based test suite.
+This repository provides the test criteria in a GoogleTest-based test suite.
 
 ## Three Pillars of Quality
 
@@ -101,8 +100,19 @@ To disable specific criteria checks for a run:
 ./build/example --criteria_disable_expect_integrity
 ```
 
+`GetValueList<T>` returns `std::optional<std::vector<T>>`. `GetValueList` returns every value logged under that name, in the order
+they were logged. If no SQL database is configured, no matching value has
+been logged, or the logged value cannot be parsed as `T`, it returns
+`std::nullopt` without recording a GoogleTest failure.
+
 These options can be combined with SQL output and GoogleTest arguments. Do not
 commit connection URIs or credentials to source control.
+
+`EXPECT_THAT_AND_LOG(result, matcher_lambda)` accepts a callable that takes the
+logged name and returns `std::optional<::testing::Matcher<T>>`, where `T` is
+the result type. Pass the callable directly, as in
+`EXPECT_THAT_AND_LOG(result, matcher)`. An empty optional skips the integrity
+assertion but still logs the result.
 
 The SQL schema used by the listener is stored in
 `submodules/gtest_output-sql/sql/`.
