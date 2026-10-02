@@ -101,9 +101,12 @@ To disable specific criteria checks for a run:
 ```
 
 `GTestCriteriaFixture::GetValue<T>` and `GetValueList<T>` return
-`std::optional<T>` and `std::optional<std::vector<T>>`, respectively. If a
-value cannot be retrieved or parsed, they return `std::nullopt` and record a
-non-fatal GoogleTest failure describing the reason.
+`std::optional<T>` and `std::optional<std::vector<T>>`, respectively. `GetValue`
+looks up the first value logged under a given name during the current test,
+while `GetValueList` returns every value logged under that name, in the order
+they were logged. If no SQL database is configured, no matching value has
+been logged, or the logged value cannot be parsed as `T`, they return
+`std::nullopt` without recording a GoogleTest failure.
 
 These options can be combined with SQL output and GoogleTest arguments. Do not
 commit connection URIs or credentials to source control.

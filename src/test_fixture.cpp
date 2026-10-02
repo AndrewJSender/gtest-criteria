@@ -72,14 +72,14 @@ std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries
     const std::string& sql_key, const std::string& logged_name) {
     try {
         if (m_db == nullptr) {
-            std::ostringstream msg; msg << "No SQL database configured.";
+            SUCCEED() << "No SQL database configured.";
             return std::nullopt;
         }
 
         const testing::TestInfo* test_info =
             testing::UnitTest::GetInstance()->current_test_info();
         if (test_info == nullptr) {
-            std::ostringstream msg; msg << "No current test running.";
+            SUCCEED() << "No current test running.";
             return std::nullopt;
         }
 
@@ -88,7 +88,7 @@ std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries
             kCriteriaSqlFile.c_str(), sql_key.c_str(),
             {test_info->test_suite_name(), test_info->name(), pattern}, {});
         if (rows.empty()) {
-            std::ostringstream msg; msg << "No rows returned for SQL key " << sql_key << " and logged name " << logged_name;
+            SUCCEED() << "No rows returned for SQL key " << sql_key << " and logged name " << logged_name;
             return std::nullopt;
         }
 
@@ -102,12 +102,12 @@ std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries
             }
         }
         if (values.empty()) {
-            std::ostringstream msg; msg << "No matching logged entries for " << logged_name;
+            SUCCEED() << "No matching logged entries for " << logged_name;
             return std::nullopt;
         }
         return values;
     } catch (const std::exception& e) {
-        std::ostringstream msg; msg << e.what();
+        SUCCEED() << e.what();
         return std::nullopt;
     }
 }
@@ -166,4 +166,9 @@ void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
             remove_count++;
         }
     }
+}
+
+void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int line_num) {
+    // TODO define a
+    SUCCEED() << msg;
 }

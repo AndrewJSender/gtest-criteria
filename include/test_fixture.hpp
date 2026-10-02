@@ -5,6 +5,7 @@
 #define GTEST_CRITERIA_FIXTURE_HPP
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -15,17 +16,10 @@
 #include "parse_argument.hpp"
 #include "sql_backend.hpp"
 
+#define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
+
 #define EXPECT_THAT_AND_LOG(result, matcher) \
-std::string name = #result ; \
-auto gmock_matcher = matcher(name); \
-TestPartResultType result_type = TestPartResultType::kSuccess; \
-if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) { \
-    EXPECT_THAT(result, *gmock_matcher); \
-    if (!::testing::Matcher<decltype(result)>(*gmock_matcher).Matches(result)) { \
-        result_type = TestPartResultType::kNonFatalFailure; \
-    } \
-} \
-LogValue(name, result, result_type, __LINE__ , __FILE__);
+    expect_that_and_log(result, #result, matcher, __FILE__, __LINE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
@@ -39,21 +33,16 @@ protected:
     static bool IsExpectIntegrityDisabled() { return m_expect_integrity_disabled; }
     
     template <typename T>
-    void LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type = testing::TestPartResult::Type::kSuccess, int line_num = 0, std::string file = "");
-
-    template <typename T>
-    std::optional<T> GetValue(const std::string &logged_name);
+    void LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num);
 
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 private:
-    // Runs `sql_key` (one of "select_logged_value" or
-    // "select_logged_value_list") against the current test's logged
+    // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values
     // with the "name=" prefix stripped. Returns std::nullopt if no database
     // is configured, no test is running, or no matching values are found.
-    static std::optional<std::vector<std::string>> QueryLoggedEntries(
-        const std::string& sql_key, const std::string& logged_name);
+    static std::optional<std::vector<std::string>> QueryLoggedEntries(const std::string& sql_key, const std::string& logged_name);
 
     // Parses `raw` as a single value of type T, requiring the entire
     // string to be consumed. Returns std::nullopt if parsing fails.
@@ -86,6 +75,21 @@ private:
 
     static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration);
 
+    static void log_internally(std::string msg, std::string file_name, int line_num);
+    
+    template <typename T>
+    void expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num) {
+        using TestPartResultType = ::testing::TestPartResult::Type;
+        TestPartResultType result_type = TestPartResultType::kSuccess;
+        if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) {
+            EXPECT_THAT(result, *gmock_matcher);
+            if (!::testing::Matcher<T>(*gmock_matcher).Matches(result)) {
+                result_type = TestPartResultType::kNonFatalFailure;
+            }
+        }
+        LogValue(result_name, result, result_type , file_name, line_num);
+    }
+
     std::chrono::high_resolution_clock::time_point test_timer;
     static std::unique_ptr<testing::SqlBackend> m_db;
     static bool m_expect_performant_disabled;
@@ -93,7 +97,7 @@ private:
 };
 
 template <typename T>
-void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, int line_num, std::string file)
+void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num)
 {
     testing::Message msg;
     msg << logged_name << "=" << value;
@@ -108,7 +112,7 @@ std::optional<T> GTestCriteriaFixture::ParseLoggedValue(const std::string& raw)
     std::istringstream input(raw);
     T value{};
     if (!(input >> value) || (input >> std::ws, !input.eof())) {
-        std::ostringstream msg; msg << "Failed to parse logged value: " << raw;
+        LOG_MSG("Failed to parse logged value: " + raw);
         return std::nullopt;
     }
     return value;
@@ -120,34 +124,24 @@ std::optional<std::vector<T>> GTestCriteriaFixture::GetValues(const std::string&
     try {
         auto logged_values = QueryLoggedEntries(sql_key, logged_name);
         if (!logged_values.has_value()) {
-            std::ostringstream msg; msg << "No logged values returned for SQL key " << sql_key << " and logged name " << logged_name;
+            SUCCEED() << "No logged values returned for SQL key " << sql_key << " and logged name " << logged_name;
             return std::nullopt;
         }
         std::vector<T> values;
         for (const auto& value : *logged_values) {
             auto parsed_value = ParseLoggedValue<T>(value);
             if (!parsed_value.has_value()) {
-                std::ostringstream msg; msg << "Failed to parse logged value: " << value;
+
+                SUCCEED() << "Failed to parse logged value: " << value;
                 return std::nullopt;
             }
             values.push_back(*parsed_value);
         }
         return values;
     } catch (const std::exception& e) {
-        std::ostringstream msg; msg << e.what();
+        SUCCEED() << e.what();
         return std::nullopt;
     }
-}
-
-template <typename T>
-std::optional<T> GTestCriteriaFixture::GetValue(const std::string &logged_name)
-{
-    auto values = GetValues<T>("select_logged_value", logged_name);
-    if (!values.has_value() || values->empty()) {
-        std::ostringstream msg; msg << "No values returned for logged name " << logged_name;
-        return std::nullopt;
-    }
-    return values->front();
 }
 
 template <typename T>
