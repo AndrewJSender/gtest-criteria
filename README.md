@@ -9,31 +9,75 @@ It is intended for C++ teams that want to investigate how test behavior changes
 over time, rather than relying only on the pass/fail result from the latest
 run.
 
-## What the example demonstrates
+## Try the demo
 
-The example in [`example/main.cpp`](example/main.cpp) has two tests:
+Build the example after initializing the submodules:
 
-- **Compare a result with its history.** `Test1` logs an integer result and,
-  when an earlier value is available, checks that the new result equals the
-  first previously logged value for that test.
-- **Check a variable result against historical behavior.** `Test2` logs a
-  random sample and, when earlier samples are available, checks that the new
-  value is within three configured standard deviations of their historical
-  average.
-- **Track test duration.** The fixture checks each test's duration against the
-  mean and standard deviation of its most recent 100 successful runs. The
-  current implementation uses a three-standard-deviation threshold and ignores
-  differences smaller than 10 milliseconds.
+```sh
+git submodule update --init --recursive
+cmake -S example -B build
+cmake --build build
+```
 
-The first run establishes history: without prior values, the example skips its
-history-based value assertions, and without prior durations, there is no
-performance baseline to compare. Run it again with the same database to compare
-against earlier results.
+Run five iterations and save the results in a SQLite database:
 
-These are examples of history-aware assertions, not an automatic flaky-test
-classifier or a complete quality score. The project does not currently compute
-a general stability metric; teams define the assertions appropriate to their
-own tests.
+```sh
+./build/example --gtest_output=sqlite:demo.db --gtest_repeat=5
+```
+
+Use a new database filename for a clean demo. If `demo.db` already exists, its
+successful results also become part of the history. With a fresh database, the
+first iteration stores values and durations without comparing them; later
+iterations compare against successful results already written during the run.
+The database is created by the listener if it does not already exist.
+
+If you have the `sqlite3` command-line tool, inspect the result of every
+iteration, including any failed assertions:
+
+```sh
+sqlite3 -header -column demo.db \
+  "SELECT suite.name, test.name, test.result,
+          test.end_timestamp - test.start_timestamp AS duration_ms
+   FROM test JOIN suite ON test.suite_id = suite.id
+   ORDER BY test.id;"
+```
+
+The example takes about two seconds per iteration because each test includes a
+one-second sleep. Its source is [`example/main.cpp`](example/main.cpp).
+
+## What the example checks
+
+- **Result integrity (`Test1`):** the test logs an integer result and, when a
+  previous successful logged value exists, expects the current result to equal
+  the first such value.
+- **Bounded variation (`Test2`):** the test logs a random sample and, when
+  previous successful samples exist, expects the new sample to be within
+  `3 * stdev` of their arithmetic mean. In this example, `stdev` is the
+  configured input standard deviation (1.0). It is **not** calculated from the
+  historical samples. The example calculates a historical standard deviation
+  but does not currently use it in the assertion.
+- **Duration regression check:** for each test, the fixture compares the
+  current duration with the mean and standard deviation of up to the 100 most
+  recent successful runs. It uses a three-standard-deviation tolerance and
+  ignores differences smaller than 10 milliseconds. It needs prior successful
+  runs before it can check a duration.
+
+The database query for logged values only selects successful result parts.
+Values from a run where the logged assertion fails do not become the next
+baseline.
+
+## What stability means here
+
+The example does **not** calculate a general stability score, estimate a
+flakiness rate, or automatically identify flaky tests. `Test2` demonstrates a
+specific, user-defined consistency check: individual samples should remain
+within a configured range around prior successful samples' mean. It can flag
+out-of-range samples, but it does not establish why they occurred or measure
+how likely a test is to fail over time.
+
+Repeated output is available in the SQL history for teams to query and analyze.
+To assess stability for a particular test, define an assertion that matches
+that test's expected behavior and the evidence you want to evaluate.
 
 ## Three dimensions of test quality
 
@@ -44,9 +88,10 @@ test quality:
 
 - **Integrity:** does a test's result still meet its expected behavior? The
   example uses prior logged values as inputs to GoogleTest matchers.
-- **Stability:** does a test behave consistently across repeated runs? The SQL
-  history can support investigation, and custom assertions can check recorded
-  values, but the example does not automatically detect flakiness.
+- **Stability:** does a test behave consistently across repeated runs? The
+  listener records results and logged values; `Test2` demonstrates one
+  configured bounded-variation assertion. There is no automatic flakiness
+  detector or general stability metric.
 - **Performance:** has a test's duration changed significantly compared with
   its recent successful runs? The fixture includes a basic historical duration
   check.
@@ -75,7 +120,7 @@ GoogleTest is initialized from
 
 ## Build
 
-Configure and build the example from the repository root:
+To rebuild the example later, configure and build it from the repository root:
 
 ```sh
 cmake -S example -B build
@@ -95,23 +140,10 @@ cmake --build build-xcode --config Debug
 open build-xcode/gtest_criteria_example.xcodeproj
 ```
 
-## Run and build history
+## Run with SQL output
 
-Write test results to a SQLite database:
-
-```sh
-./build/example --gtest_output=sqlite:test_results.db
-```
-
-Run the command again with the same database to exercise the history-based
-assertions against earlier results. GoogleTest arguments can be combined with
-SQL output, for example:
-
-```sh
-./build/example --gtest_repeat=5 --gtest_output=sqlite:test_results.db
-```
-
-To write results to PostgreSQL, provide a libpq connection URI:
+The demo command above writes results to SQLite. To run the example against a
+PostgreSQL database instead, provide a libpq connection URI:
 
 ```sh
 ./build/example --gtest_output=postgresql://DB_HOST:5432/DB_NAME
