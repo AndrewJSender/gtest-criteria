@@ -1,26 +1,62 @@
 # Google Test Criteria
 
-This repository provides the test criteria in a GoogleTest-based test suite.
+**Add history-aware checks to GoogleTest suites.** Google Test Criteria is a
+C++ test-fixture example that stores test results and logged values in SQL, then
+uses prior runs to check expected behavior and flag significant changes in test
+duration.
 
-## Three Pillars of Quality
+It is intended for C++ teams that want to investigate how test behavior changes
+over time, rather than relying only on the pass/fail result from the latest
+run.
 
-Quality is assessed across three dimensions: integrity, stability, and performance. Together, these pillars provide a broad view of the test suite's quality.
+## What the example demonstrates
+
+The example in [`example/main.cpp`](example/main.cpp) has two tests:
+
+- **Compare a result with its history.** `Test1` logs an integer result and,
+  when an earlier value is available, checks that the new result equals the
+  first previously logged value for that test.
+- **Check a variable result against historical behavior.** `Test2` logs a
+  random sample and, when earlier samples are available, checks that the new
+  value is within three configured standard deviations of their historical
+  average.
+- **Track test duration.** The fixture checks each test's duration against the
+  mean and standard deviation of its most recent 100 successful runs. The
+  current implementation uses a three-standard-deviation threshold and ignores
+  differences smaller than 10 milliseconds.
+
+The first run establishes history: without prior values, the example skips its
+history-based value assertions, and without prior durations, there is no
+performance baseline to compare. Run it again with the same database to compare
+against earlier results.
+
+These are examples of history-aware assertions, not an automatic flaky-test
+classifier or a complete quality score. The project does not currently compute
+a general stability metric; teams define the assertions appropriate to their
+own tests.
+
+## Three dimensions of test quality
+
+The project uses integrity, stability, and performance as a way to think about
+test quality:
 
 ![Diagram showing integrity, stability, and performance as the three pillars of quality](docs/images/pillars.png)
 
-* **Integrity:** tests produce the expected results and output. It helps identify incorrect assertions, unexpected changes, and other signs that a test no longer verifies the behavior it was intended to check.
-* **Stability:** tests generally produce reliable output across repeated runs. It focuses on whether a test behaves dependably over time and helps expose flaky tests and intermittent failures, rather than whether every output value is identical.
-* **Performance:** tests complete within an acceptable and predictable amount of time. Tracking execution duration helps identify slowdowns and performance regressions.
+- **Integrity:** does a test's result still meet its expected behavior? The
+  example uses prior logged values as inputs to GoogleTest matchers.
+- **Stability:** does a test behave consistently across repeated runs? The SQL
+  history can support investigation, and custom assertions can check recorded
+  values, but the example does not automatically detect flakiness.
+- **Performance:** has a test's duration changed significantly compared with
+  its recent successful runs? The fixture includes a basic historical duration
+  check.
 
-## Explanation of Criteria
-
-The diagram shows quality as the result of these three dimensions working together: integrity, stability, and performance each contribute to the overall assessment.
-
-![alt text](docs/images/function_diagram.png)
+![Diagram illustrating how integrity, stability, and performance contribute to quality](docs/images/function_diagram.png)
 
 ## Dependencies
 
-The SQL output listener is included as the `gtest_output-sql` submodule. Its nested submodules provide GoogleTest and SQLite:
+The SQL output listener is included as the `gtest_output-sql` submodule. Its
+nested submodules provide GoogleTest and SQLite:
 
 ```sh
 git submodule update --init --recursive
@@ -59,39 +95,70 @@ cmake --build build-xcode --config Debug
 open build-xcode/gtest_criteria_example.xcodeproj
 ```
 
-## Run
+## Run and build history
 
-Run the tests and write criteria data to a SQLite database:
+Write test results to a SQLite database:
 
-    ./build/example --gtest_output=sqlite:test_results.db
+```sh
+./build/example --gtest_output=sqlite:test_results.db
+```
 
-To write test results to PostgreSQL, provide a libpq connection URI:
+Run the command again with the same database to exercise the history-based
+assertions against earlier results. GoogleTest arguments can be combined with
+SQL output, for example:
+
+```sh
+./build/example --gtest_repeat=5 --gtest_output=sqlite:test_results.db
+```
+
+To write results to PostgreSQL, provide a libpq connection URI:
 
 ```sh
 ./build/example --gtest_output=postgresql://DB_HOST:5432/DB_NAME
 ```
 
-### Historical test output
+The listener stores test results, logged values, and execution durations in
+SQL. The schema used by the listener is in
+[`submodules/gtest_output-sql/sql/`](submodules/gtest_output-sql/sql/).
 
-The other benefit of `gtest_output-sql` is that it preserves test output in a database instead of limiting analysis to the current run. This creates a history of test results, logged values, and execution durations that can be compared over time. With that historical data, we can measure and monitor test integrity and performance: detect changes in expected output, identify tests whose behavior becomes inconsistent, and track regressions or improvements in runtime.
+Do not commit connection URIs or credentials to source control.
 
-To disable specific criteria checks for a run:
+## Add history-aware assertions
+
+Derive a fixture from `GTestCriteriaFixture` and wrap a result and matcher with
+`EXPECT_THAT_AND_LOG`. The macro checks the matcher when it is available and
+logs the result for future runs:
+
+```cpp
+auto matcher = [this](std::string name)
+    -> std::optional<::testing::Matcher<int>> {
+    auto previous = GetValueList<int>(name);
+    if (!previous.has_value()) {
+        return std::nullopt;  // No baseline yet.
+    }
+    return ::testing::Eq(previous->front());
+};
+EXPECT_THAT_AND_LOG(result, matcher);
+```
+
+`GetValueList<T>` returns `std::optional<std::vector<T>>` containing values
+logged under that name, in logging order. It returns `std::nullopt` if no
+database is configured, no matching value is available, or a value cannot be
+parsed as `T`. An empty optional matcher skips the integrity assertion while
+still logging the current result.
+
+To disable a criterion check for a run:
 
 ```sh
 ./build/example --criteria_disable_expect_performant
 ./build/example --criteria_disable_expect_integrity
 ```
 
-`GetValueList<T>` returns `std::optional<std::vector<T>>`. `GetValueList` returns every value logged under that name, in the order they were logged. If no SQL database is configured, no matching value has been logged, or the logged value cannot be parsed as `T`, it returns `std::nullopt` without recording a GoogleTest failure.
-
-These options can be combined with SQL output and GoogleTest arguments. Do not commit connection URIs or credentials to source control.
-
-`EXPECT_THAT_AND_LOG(result, matcher_lambda)` accepts a callable that takes the logged name and returns `std::optional<::testing::Matcher<T>>`, where `T` is the result type. Pass the callable directly, as in `EXPECT_THAT_AND_LOG(result, matcher)`. An empty optional skips the integrity assertion but still logs the result.
-
-The SQL schema used by the listener is stored in `submodules/gtest_output-sql/sql/`.
-
-Note: Disabling the stability dimension would mean disabling the test itself. Therefore, `--criteria_disable_stability` is not available.
+These options can be combined with SQL output and other GoogleTest arguments.
+The stability dimension is not a separate automatic check in this example, so
+there is no `--criteria_disable_stability` option.
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+details.
