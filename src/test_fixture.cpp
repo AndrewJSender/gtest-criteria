@@ -177,3 +177,29 @@ void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int
     // Currently, this just logs the message using SUCCEED().
     SUCCEED() << msg;
 }
+
+std::optional<float> GTestCriteriaFixture::GetTestFailureRate() {
+    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
+    if (!test_info) {
+        return std::nullopt;
+    }
+    const std::string suite_name = test_info->test_suite_name();
+    const std::string test_name = test_info->name();
+
+    if (!m_db) {
+        return std::nullopt;
+    }
+
+    const auto rows = m_db->Query(
+        kCriteriaSqlFile.c_str(), "select_test_failure_rate",
+        {suite_name, test_name}, {});
+
+    if (rows.empty()) {
+        LOG_MSG("No rows returned for suite " + suite_name + " and test " + test_name);
+        return std::nullopt;
+    }
+    
+    // Assuming the first row and first column contains the failure rate
+    float failure_rate = static_cast<float>(rows[0][0]);
+    return std::optional<float>(failure_rate);
+}

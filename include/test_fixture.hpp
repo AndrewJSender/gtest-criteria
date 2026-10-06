@@ -44,6 +44,8 @@ protected:
 
     template <typename T>
     void expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num);
+
+    std::optional<float> GetTestFailureRate();
 private:
     // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values
@@ -56,7 +58,7 @@ private:
      * @param logged_name The name of the logged entries to retrieve.
      * @return std::optional<std::vector<std::string>> A vector of matching logged values with the "name=" prefix stripped, or std::nullopt if no matching entries are found.
      */
-    static std::optional<std::vector<std::string>> QueryLoggedEntries(const std::string& sql_key, const std::string& logged_name);
+    std::optional<std::vector<std::string>> QueryLoggedEntries(const std::string& sql_key, const std::string& logged_name);
 
     // Parses `raw` as a single value of type T, requiring the entire
     // string to be consumed. Returns std::nullopt if parsing fails.
@@ -67,7 +69,7 @@ private:
     // Returns std::nullopt if the query finds nothing or any entry fails to
     // parse.
     template <typename T>
-    static std::optional<std::vector<T>> GetValues(const std::string& sql_key, const std::string& logged_name);
+    std::optional<std::vector<T>> GetValues(const std::string& sql_key, const std::string& logged_name);
 
     // Mean and (population) standard deviation of `end_timestamp -
     // start_timestamp` across all completed rows of a table, in the same

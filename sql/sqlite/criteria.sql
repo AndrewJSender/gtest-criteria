@@ -18,3 +18,9 @@ FROM (
   AND test.start_timestamp IS NOT NULL AND test.end_timestamp IS NOT NULL
   ORDER BY test.id DESC LIMIT 100
 ) AS recent_durations;
+
+-- select_test_failure_rate
+SELECT COUNT(*) FILTER (WHERE test.result = 'failed') * 1.0 / COUNT(*)
+FROM test
+JOIN suite ON test.suite_id = suite.id
+WHERE suite.name = ? AND test.name = ?;
