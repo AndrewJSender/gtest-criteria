@@ -12,38 +12,36 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include "parse_argument.hpp"
 #include "sql_backend.hpp"
 
 #define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
-
-#define EXPECT_THAT_AND_LOG(result, matcher_lambda)                                      \
-    expect_that_and_log(result, #result,                                                 \
-                        IsExpectIntegrityDisabled()                                      \
-                            ? decltype((matcher_lambda)(#result)){}                       \
-                            : (matcher_lambda)(#result),                                  \
-                        __FILE__, __LINE__)
+#define EXPECT_THAT_AND_LOG(result, matcher_lambda) expect_that_and_log(result, #result, matcher_lambda, __FILE__, __LINE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
 public:
+    using TestPartResultType = testing::TestPartResult::Type;
+    GTestCriteriaFixture();
     static void ConfigureSqlDb(std::optional<SqlOutput>);
-    static void ParseDisableExpectArgument(int* argc, char* argv[]);
+    static void ParseDisableExpectArguments(int* argc, char* argv[]);
 protected:
     void SetUp() override;
     void TearDown() override;
-
-    static bool IsExpectIntegrityDisabled() { return m_expect_integrity_disabled; }
     
     template <typename T>
-    void LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num);
+    void LogValue(const std::string &logged_name, T value, TestPartResultType type, std::string file, int line_num);
 
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 
-    template <typename T>
-    void expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num);
+    template <typename ResultType, typename MatcherFactory>
+    TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda);
+    
+    template <typename ResultType, typename MatcherFactory>
+    void expect_that_and_log(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, std::string file_name, int line_num);
 
     std::optional<float> GetTestFailureRate();
 private:
@@ -91,13 +89,14 @@ private:
     /**
      * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
      * 
-     * @param stats The duration statistics to compare against.
      * @param test_duration The actual duration of the test.
-     * @param threshold_multiplier The multiplier for the standard deviation to define the acceptable performance range.
+     * @param stdev_threshold The multiplier for the standard deviation to define the acceptable performance range.
      * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
      */
-    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier, double min_difference);
+    void expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference = 5.0);
 
+    void expect_stable(float stable_threshold);
+    
     /**
      * @brief Logs a message internally, typically for test results.
      * 
@@ -111,6 +110,10 @@ private:
     static std::unique_ptr<testing::SqlBackend> m_db;
     static bool m_expect_performant_disabled;
     static bool m_expect_integrity_disabled;
+    static bool m_expect_stable_disabled;
+
+    const std::string m_test_suite_name;
+    const std::string m_test_name;
 };
 
 #include "test_fixture.tpp"

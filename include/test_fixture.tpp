@@ -2,7 +2,7 @@
 // All rights reserved.
 
 template <typename T>
-void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num)
+void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, TestPartResultType type, std::string file, int line_num)
 {
     testing::Message msg;
     msg << logged_name << "=" << value;
@@ -55,15 +55,28 @@ std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::stri
     return GetValues<T>("select_logged_value_list", logged_name);
 }
 
-template <typename T>
-void GTestCriteriaFixture::expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num) {
-    using TestPartResultType = ::testing::TestPartResult::Type;
+template <typename ResultType, typename MatcherFactory>
+GTestCriteriaFixture::TestPartResultType GTestCriteriaFixture::run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda) {
+    std::optional<testing::Matcher<ResultType>> gmock_matcher = matcher_lambda(result_name);
+    if (!gmock_matcher.has_value()) {
+        return GTestCriteriaFixture::TestPartResultType::kSuccess;
+    }
+    EXPECT_THAT(result, *gmock_matcher);
+    if (testing::Matcher<ResultType>(*gmock_matcher).Matches(result)) {
+        return GTestCriteriaFixture::TestPartResultType::kSuccess;
+    } else {
+        return GTestCriteriaFixture::TestPartResultType::kNonFatalFailure;
+    }
+}
+
+template <typename ResultType, typename MatcherFactory>
+void GTestCriteriaFixture::expect_that_and_log(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, std::string file_name, int line_num) {
+    // The result type initiates to success, which is inaccurate.
+    // However, GTest evaluates the overall test result by its parts,
+    // If any part is non-success, the overall test result will reflect the failure or skip.
     TestPartResultType result_type = TestPartResultType::kSuccess;
-    if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) {
-        EXPECT_THAT(result, *gmock_matcher);
-        if (!::testing::Matcher<T>(*gmock_matcher).Matches(result)) {
-            result_type = TestPartResultType::kNonFatalFailure;
-        }
+    if (!m_expect_integrity_disabled) {
+        result_type = run_matcher_lambda_and_expect_that(result, result_name, matcher_lambda);
     }
     LogValue(result_name, result, result_type , file_name, line_num);
 }

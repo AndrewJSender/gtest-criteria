@@ -78,6 +78,7 @@ set(EXAMPLE_SCHEME_ARGUMENTS
     "--gtest_output=sqlite:test_output.db"
     "--criteria_disable_expect_performant"
     "--criteria_disable_expect_integrity"
+    "--criteria_disable_expect_stable"
 )
 
 set_target_properties(example PROPERTIES

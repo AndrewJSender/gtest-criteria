@@ -163,12 +163,12 @@ logs the result for future runs:
 
 ```cpp
 auto matcher = [this](std::string name)
-    -> std::optional<::testing::Matcher<int>> {
+    -> std::optional<testing::Matcher<int>> {
     auto previous = GetValueList<int>(name);
     if (!previous.has_value()) {
         return std::nullopt;  // No baseline yet.
     }
-    return ::testing::Eq(previous->front());
+    return testing::Eq(previous->front());
 };
 EXPECT_THAT_AND_LOG(result, matcher);
 ```
@@ -184,6 +184,7 @@ To disable a criterion check for a run:
 ```sh
 ./build/example --criteria_disable_expect_performant
 ./build/example --criteria_disable_expect_integrity
+./build/example --criteria_disable_expect_stable
 ```
 
 These options can be combined with SQL output and other GoogleTest arguments.

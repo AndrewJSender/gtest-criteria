@@ -16,16 +16,10 @@
 
 class TestExampleFixture : public GTestCriteriaFixture {
 protected:
-    int test_int(int input_value) {
-        // performing some operation before returning the result
-        std::this_thread::sleep_for(std::chrono::seconds(input_value));
-        return input_value * 2;
-    }
-    
+    // TODO: add an argument parser --exert_failure
+    bool m_exert_failure = false;
+
     float test_normal_dist(float mean, float stdev) {
-        // performing some operation before returning the result
-        std::chrono::seconds sleep_secs(std::abs( 1));
-        std::this_thread::sleep_for(sleep_secs);
         std::random_device rd{};
         std::mt19937 gen{rd()};
 
@@ -38,7 +32,7 @@ protected:
         return random_float();
     }
 
-    std::pair<float, float> test_mean_and_stdev(std::vector<float> values_list) {
+    std::pair<float, float> calculate_mean_and_stdev(std::vector<float> values_list) {
         float sum_linear = 0.0f;
         float sum_sq = 0.0f;
         for (float value : values_list) {
@@ -54,62 +48,45 @@ protected:
 
 TEST_F(TestExampleFixture, Performance) {
     int input_value = 1;
-    // int input_value = 5;
-    int result = test_int(input_value);
-    auto matcher = [this](std::string name)
-        -> std::optional<::testing::Matcher<int>> {
-        auto expected = GetValueList<int>(name);
-        if (!expected.has_value()) {
-            return std::nullopt;
-        }
-        return ::testing::Eq(expected->front());
-    };
-    EXPECT_THAT_AND_LOG(result, matcher);
+    if (m_exert_failure) {
+        input_value = 3;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(input_value));
+    // Performance evaluated in TestExampleFixture::TearDown
 }
 
 TEST_F(TestExampleFixture, Integrity) {
     float input_mean = 0.0f;
-    // float input_mean = 10.0f;
     float stdev = 1.0f;
     float result = test_normal_dist(input_mean, stdev);
-    auto matcher = [this, c_stdev = stdev](std::string name) -> std::optional<::testing::Matcher<float>> {
+    if (m_exert_failure) {
+        input_mean = 10.0f;
+    }
+    auto matcher = [this, c_stdev = stdev](std::string name) -> std::optional<testing::Matcher<float>> {
         auto values_list = GetValueList<float>(name);
         if (!values_list.has_value()) {
             return std::nullopt;
         }
         float expected_avg, expected_stdev;
-        std::tie(expected_avg, expected_stdev) = test_mean_and_stdev(*values_list);
-        return ::testing::FloatNear(expected_avg, 3 * c_stdev);
+        std::tie(expected_avg, expected_stdev) = calculate_mean_and_stdev(*values_list);
+        return testing::FloatNear(expected_avg, 3 * c_stdev);
     };
     EXPECT_THAT_AND_LOG(result, matcher);
 }
 
 TEST_F(TestExampleFixture, Stability) {
     float failure_rate = 0.05;
-    float stable_threshold = 0.10;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(0, 1.0);
-    float result = dis(gen);
-
-    auto matcher = [this, c_failure_rate = failure_rate](std::string name) -> std::optional<::testing::Matcher<float>> {
-        return ::testing::Gt(c_failure_rate);
-    };
-    EXPECT_THAT_AND_LOG(result, matcher);
-    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
-    auto total_part_count = test_info->result()->total_part_count();
-    auto last_part_result = test_info->result()->GetTestPartResult(total_part_count-1);
-    if (last_part_result.type() == testing::TestPartResult::kNonFatalFailure) {
-        auto actual_failure_rate = GetTestFailureRate();
-        if (actual_failure_rate.has_value() && actual_failure_rate.has_value() < stable_threshold) {
-            GTEST_SKIP();
-        }
-    }
+    float uniform_rd_number = dis(gen);
+    EXPECT_LT(failure_rate, uniform_rd_number);
+    // Stability evaluated in TestExampleFixture::TearDown
 }
 
 int main(int argc, char* argv[]) {
     auto sql_output = ParseGtestSqlOutputArgument(&argc, argv);
-    GTestCriteriaFixture::ParseDisableExpectArgument(&argc, argv);
+    GTestCriteriaFixture::ParseDisableExpectArguments(&argc, argv);
     testing::InitGoogleTest(&argc, argv);
     RegisterSqlTestEventListenerIfRequested(sql_output);
     GTestCriteriaFixture::ConfigureSqlDb(sql_output);

@@ -18,12 +18,22 @@ namespace {
 const std::string kCriteriaSqlFile = std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
 const std::string kDisableExpectPerformantArgName = "--criteria_disable_expect_performant";
 const std::string kDisableExpectIntegrityArgName = "--criteria_disable_expect_integrity";
+const std::string kDisableExpectStableArgName = "--criteria_disable_expect_stable";
 
 }  // namespace
 
 std::unique_ptr<testing::SqlBackend> GTestCriteriaFixture::m_db;
 bool GTestCriteriaFixture::m_expect_performant_disabled = false;
 bool GTestCriteriaFixture::m_expect_integrity_disabled = false;
+bool GTestCriteriaFixture::m_expect_stable_disabled = false;
+
+GTestCriteriaFixture::GTestCriteriaFixture()
+    : m_test_suite_name(
+          testing::UnitTest::GetInstance()->current_test_info()->test_suite_name()),
+      m_test_name(
+          testing::UnitTest::GetInstance()->current_test_info()->name())
+{
+}
 
 void GTestCriteriaFixture::ConfigureSqlDb(std::optional<SqlOutput> arg) {
     m_db.reset();
@@ -76,17 +86,10 @@ std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries
             return std::nullopt;
         }
 
-        const testing::TestInfo* test_info =
-            testing::UnitTest::GetInstance()->current_test_info();
-        if (test_info == nullptr) {
-            LOG_MSG("No current test running.");
-            return std::nullopt;
-        }
-
         const std::string pattern = logged_name + "=%";
         const auto rows = m_db->Query(
             kCriteriaSqlFile.c_str(), sql_key.c_str(),
-            {test_info->test_suite_name(), test_info->name(), pattern}, {});
+            {m_test_suite_name, m_test_name, pattern}, {});
         if (rows.empty()) {
             LOG_MSG("No rows returned for SQL key " + sql_key + " and logged name " + logged_name);
             return std::nullopt;
@@ -117,37 +120,57 @@ void GTestCriteriaFixture::SetUp()
     test_timer = std::chrono::high_resolution_clock::now();
 }
 
-void GTestCriteriaFixture::expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier, double min_difference)
+void GTestCriteriaFixture::expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference)
 {
-    if (stats.count == 0) { return; }
     if (m_expect_performant_disabled) { return; }
+    const DurationStats test_stats = ComputeDurationStats(m_test_suite_name, m_test_name);
+    if (test_stats.count == 0) { return; }
 
     // Example performance expectation: test duration should not exceed mean +/- threshold_multiplier * stddev
     // if test duration is suddenly faster, it should still fail to assess performance.
     const double test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-    if (std::abs(test_duration_ms - stats.mean) < min_difference) {
+    if (std::abs(test_duration_ms - test_stats.mean) < min_difference) {
         return;
     }
-    EXPECT_NEAR(test_duration_ms, stats.mean, threshold_multiplier * stats.stddev) << "Test duration deviated beyond the performance threshold.";
+    EXPECT_NEAR(test_duration_ms, test_stats.mean, stdev_threshold * test_stats.stddev) << "Test duration deviated beyond the performance threshold.";
+}
+
+void GTestCriteriaFixture::expect_stable(float stable_threshold) {
+    if (m_expect_stable_disabled) { return; }
+    ASSERT_LT(stable_threshold, 1.0) << "Stable threshold must be less than 1.0";
+    ASSERT_GT(stable_threshold, 0.0) << "Stable threshold must be greater than 0.0";
+    auto current_result = testing::UnitTest::GetInstance()->current_test_info()->result();
+    if (current_result->Passed()) { return; }
+    auto historical_failure_rate = GetTestFailureRate();
+    if (!historical_failure_rate.has_value()) {
+        return;
+    }
+    if (historical_failure_rate.value() < stable_threshold) {
+        std::string msg = "Test is stable: historical failure rate " + std::to_string(historical_failure_rate.value()) + " is below the stable threshold " + std::to_string(stable_threshold) + ".";
+        GTEST_SKIP() << msg;
+    }
 }
 
 void GTestCriteriaFixture::TearDown()
 {
     /** 
      * We assume the difference between event listeners
-     * (:testing::EmptyTestEventListener::OnTestEnd - ::testing::EmptyTestEventListener::OnTestStart)
+     * (testing::EmptyTestEventListener::OnTestEnd - testing::EmptyTestEventListener::OnTestStart)
      * is approximately the same difference between GTestCriteriaFixture::TearDown() - GTestCriteriaFixture::SetUp()
      * for a given suite.test.
      */
     auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
-    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
-    const DurationStats test_stats = ComputeDurationStats(test_info->test_suite_name(), test_info->name());
-    double threshold_multiplier = 3.0; // six-sigma rule
+    auto current_result = testing::UnitTest::GetInstance()->current_test_info()->result();
+    double stdev_threshold = 3.0; // six-sigma rule
     double min_difference = 10.0; // minimum difference in milliseconds to consider performance deviation
-    expect_performant(test_stats, test_duration, threshold_multiplier, min_difference);
+    expect_performant(test_duration, stdev_threshold, min_difference);
+    
+    
+    double stable_threshold = 0.05;
+    expect_stable(stable_threshold);
 }
 
-void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
+void GTestCriteriaFixture::ParseDisableExpectArguments(int* argc, char* argv[]) {
     int remove_count = 0; // not really used, but interesting to know
     for (int i = 1; i < *argc; ++i) {
         const std::string argument(argv[i]);
@@ -158,7 +181,11 @@ void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
         } else if (argument == kDisableExpectIntegrityArgName) {
             m_expect_integrity_disabled = true;
             remove_argument = true;
+        } else if (argument == kDisableExpectStableArgName) {
+            m_expect_stable_disabled = true;
+            remove_argument = true;
         }
+        
         if (remove_argument) {
             // shift elements left to overwrite/remove the argument from argv
             for (int j = i; j + 1 < *argc; ++j) {
@@ -173,33 +200,30 @@ void GTestCriteriaFixture::ParseDisableExpectArgument(int* argc, char* argv[]) {
 }
 
 void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int line_num) {
-    // TODO define a proper logging mechanism
-    // Currently, this just logs the message using SUCCEED().
+    /**
+     // TODO define a proper logging mechanism
+     * Currently, this just logs the message using SUCCEED()
+     * Otherwise, the test result may be non-successful
+     * if a different result type is used.
+     */
     SUCCEED() << msg;
 }
 
 std::optional<float> GTestCriteriaFixture::GetTestFailureRate() {
-    const testing::TestInfo* test_info = testing::UnitTest::GetInstance()->current_test_info();
-    if (!test_info) {
-        return std::nullopt;
-    }
-    const std::string suite_name = test_info->test_suite_name();
-    const std::string test_name = test_info->name();
-
     if (!m_db) {
         return std::nullopt;
     }
 
     const auto rows = m_db->Query(
         kCriteriaSqlFile.c_str(), "select_test_failure_rate",
-        {suite_name, test_name}, {});
+        {m_test_suite_name, m_test_name}, {});
 
     if (rows.empty()) {
-        LOG_MSG("No rows returned for suite " + suite_name + " and test " + test_name);
+        LOG_MSG("No rows returned for suite " + m_test_suite_name + " and test " + m_test_name);
         return std::nullopt;
     }
     
     // Assuming the first row and first column contains the failure rate
-    float failure_rate = static_cast<float>(rows[0][0]);
+    float failure_rate = std::stof(rows[0][0]);
     return std::optional<float>(failure_rate);
 }
