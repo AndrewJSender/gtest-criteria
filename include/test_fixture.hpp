@@ -44,6 +44,17 @@ protected:
     void expect_that_and_log(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, std::string file_name, int line_num);
 
     std::optional<float> GetTestFailureRate();
+    
+    /**
+     * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
+     *
+     * @param test_duration The actual duration of the test.
+     * @param stdev_threshold The multiplier for the standard deviation to define the acceptable performance range.
+     * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
+     */
+    void expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference = 5.0);
+
+    void expect_stable(float stable_threshold);
 private:
     // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values
@@ -86,16 +97,7 @@ private:
     static DurationStats ComputeDurationStats(const std::string& suite_name,
                                               const std::string& test_name);
 
-    /**
-     * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
-     * 
-     * @param test_duration The actual duration of the test.
-     * @param stdev_threshold The multiplier for the standard deviation to define the acceptable performance range.
-     * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
-     */
-    void expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference = 5.0);
-
-    void expect_stable(float stable_threshold);
+    
     
     /**
      * @brief Logs a message internally, typically for test results.

@@ -81,7 +81,8 @@ TEST_F(TestExampleFixture, Stability) {
     std::uniform_real_distribution<float> dis(0, 1.0);
     float uniform_rd_number = dis(gen);
     EXPECT_LT(failure_rate, uniform_rd_number);
-    // Stability evaluated in TestExampleFixture::TearDown
+    double stable_threshold = 0.05;
+    expect_stable(stable_threshold);
 }
 
 int main(int argc, char* argv[]) {

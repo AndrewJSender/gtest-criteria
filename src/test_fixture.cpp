@@ -139,7 +139,7 @@ void GTestCriteriaFixture::expect_stable(float stable_threshold) {
     if (m_expect_stable_disabled) { return; }
     ASSERT_LT(stable_threshold, 1.0) << "Stable threshold must be less than 1.0";
     ASSERT_GT(stable_threshold, 0.0) << "Stable threshold must be greater than 0.0";
-    auto current_result = testing::UnitTest::GetInstance()->current_test_info()->result();
+    const testing::TestResult* current_result = testing::UnitTest::GetInstance()->current_test_info()->result();
     if (current_result->Passed()) { return; }
     auto historical_failure_rate = GetTestFailureRate();
     if (!historical_failure_rate.has_value()) {
@@ -166,8 +166,7 @@ void GTestCriteriaFixture::TearDown()
     expect_performant(test_duration, stdev_threshold, min_difference);
     
     
-    double stable_threshold = 0.05;
-    expect_stable(stable_threshold);
+    
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArguments(int* argc, char* argv[]) {
