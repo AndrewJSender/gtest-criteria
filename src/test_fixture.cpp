@@ -135,21 +135,6 @@ void GTestCriteriaFixture::expect_performant(std::chrono::high_resolution_clock:
     EXPECT_NEAR(test_duration_ms, test_stats.mean, stdev_threshold * test_stats.stddev) << "Test duration deviated beyond the performance threshold.";
 }
 
-void GTestCriteriaFixture::expect_stable(float stable_threshold) {
-    if (m_expect_stable_disabled) { return; }
-    ASSERT_LT(stable_threshold, 1.0) << "Stable threshold must be less than 1.0";
-    ASSERT_GT(stable_threshold, 0.0) << "Stable threshold must be greater than 0.0";
-    const testing::TestResult* current_result = testing::UnitTest::GetInstance()->current_test_info()->result();
-    if (current_result->Passed()) { return; }
-    auto historical_failure_rate = GetTestFailureRate();
-    if (!historical_failure_rate.has_value()) {
-        return;
-    }
-    if (historical_failure_rate.value() < stable_threshold) {
-        std::string msg = "Test is stable: historical failure rate " + std::to_string(historical_failure_rate.value()) + " is below the stable threshold " + std::to_string(stable_threshold) + ".";
-        GTEST_SKIP() << msg;
-    }
-}
 
 void GTestCriteriaFixture::TearDown()
 {
@@ -164,9 +149,6 @@ void GTestCriteriaFixture::TearDown()
     double stdev_threshold = 3.0; // six-sigma rule
     double min_difference = 10.0; // minimum difference in milliseconds to consider performance deviation
     expect_performant(test_duration, stdev_threshold, min_difference);
-    
-    
-    
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArguments(int* argc, char* argv[]) {

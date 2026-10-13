@@ -80,3 +80,32 @@ void GTestCriteriaFixture::expect_that_and_log(ResultType result, const std::str
     }
     LogValue(result_name, result, result_type , file_name, line_num);
 }
+
+template <typename ResultType, typename MatcherFactory>
+void GTestCriteriaFixture::expect_that_and_stable(ResultType result, MatcherFactory matcher_lambda, float stable_threshold, std::string file_name, int line_num) {
+    if (m_expect_stable_disabled) { return; }
+    ASSERT_LT(stable_threshold, 1.0) << "Stable threshold must be less than 1.0";
+    ASSERT_GT(stable_threshold, 0.0) << "Stable threshold must be greater than 0.0";
+
+    std::optional<testing::Matcher<ResultType>> gmock_matcher = matcher_lambda();
+    if (!gmock_matcher.has_value()) {
+        return;
+    }
+    if (testing::Matcher<ResultType>(*gmock_matcher).Matches(result)) {
+        EXPECT_THAT(result, *gmock_matcher);
+        return;
+    }
+
+    // non-fatal failure handling based on historical failure rate
+    auto historical_failure_rate = GetTestFailureRate();
+    if (!historical_failure_rate.has_value()) {
+        EXPECT_THAT(result, *gmock_matcher);
+        return;
+    }
+    if (historical_failure_rate.value() < stable_threshold) {
+        std::string msg = "Test is stable: historical failure rate " + std::to_string(historical_failure_rate.value()) + " is below the stable threshold " + std::to_string(stable_threshold) + ".";
+        GTEST_SKIP() << msg;
+    } else {
+        EXPECT_THAT(result, *gmock_matcher);
+    }
+}

@@ -42,42 +42,55 @@ sqlite3 -header -column demo.db \
    ORDER BY test.id;"
 ```
 
-The example takes about two seconds per iteration because each test includes a
-one-second sleep. Its source is [`example/main.cpp`](example/main.cpp).
+The performance test sleeps for one second per iteration; the integrity and
+stability checks are quick. The source is
+[`example/main.cpp`](example/main.cpp).
 
 ## What the example checks
 
-- **Result integrity (`Test1`):** the test logs an integer result and, when a
-  previous successful logged value exists, expects the current result to equal
-  the first such value.
-- **Bounded variation (`Test2`):** the test logs a random sample and, when
-  previous successful samples exist, expects the new sample to be within
-  `3 * stdev` of their arithmetic mean. In this example, `stdev` is the
-  configured input standard deviation (1.0). It is **not** calculated from the
-  historical samples. The example calculates a historical standard deviation
-  but does not currently use it in the assertion.
-- **Duration regression check:** for each test, the fixture compares the
-  current duration with the mean and standard deviation of up to the 100 most
-  recent successful runs. It uses a three-standard-deviation tolerance and
-  ignores differences smaller than 10 milliseconds. It needs prior successful
-  runs before it can check a duration.
+- **Performance (`TestExampleFixture.Performance`):** measures a test that
+  sleeps for one second. In `TearDown`, the fixture compares its duration with
+  the mean and standard deviation of up to the 100 most recent successful runs
+  of that test. It allows a three-standard-deviation difference and ignores
+  differences under 10 milliseconds. No comparison is made until a successful
+  duration is available. This is a simple example threshold, not a robust
+  performance benchmark.
+- **Integrity (`TestExampleFixture.Integrity`):** generates a sample from a
+  normal distribution with mean 0 and standard deviation 1. When earlier
+  successful samples are available, it calculates their arithmetic mean and
+  population standard deviation, then expects the new sample to be within three
+  historical standard deviations of that mean. With no prior samples, it logs
+  the result without making this comparison. This is a historical consistency
+  check, not a comparison against an independently specified expected value;
+  with very little history, the estimated mean and standard deviation can be
+  unstable.
+- **Stability (`TestExampleFixture.Stability`):** intentionally has a 5%
+  chance of failing a random check on each run. If that check fails,
+  `expect_stable(0.05)` looks up the failure rate for this test and calls
+  `GTEST_SKIP()` when that rate is below 5%. The SQL query calculates failed
+  test rows divided by all recorded rows with the same suite and test name; it
+  does not limit the calculation to a fixed number of recent runs or filter
+  out non-failed statuses from the denominator. The current run's row has
+  already been inserted when this check runs.
 
-The database query for logged values only selects successful result parts.
-Values from a run where the logged assertion fails do not become the next
-baseline.
+This stability behavior does not stop the random check from failing, predict
+future failures, or independently determine whether a test is flaky. It applies
+a specific policy to a failing run based on the recorded failure fraction. The
+query includes the current in-progress row in its denominator, so the result
+should be interpreted as a demonstration of the policy, not as a reliable
+historical failure-rate estimate.
 
-## What stability means here
+For integrity, only successful logged result parts are returned as historical
+values. A value logged by a failed assertion is not included in later
+comparisons.
 
-The example does **not** calculate a general stability score, estimate a
-flakiness rate, or automatically identify flaky tests. `Test2` demonstrates a
-specific, user-defined consistency check: individual samples should remain
-within a configured range around prior successful samples' mean. It can flag
-out-of-range samples, but it does not establish why they occurred or measure
-how likely a test is to fail over time.
+## Stability scope
 
-Repeated output is available in the SQL history for teams to query and analyze.
-To assess stability for a particular test, define an assertion that matches
-that test's expected behavior and the evidence you want to evaluate.
+The demo computes an observed failure fraction for one named test and applies
+the skip policy described above; it is not a general stability score, a
+flakiness classifier, or a predictor of future failures. The result is
+particularly sensitive to small sample sizes and to which runs are present in
+the database.
 
 ## Three dimensions of test quality
 
@@ -89,9 +102,9 @@ test quality:
 - **Integrity:** does a test's result still meet its expected behavior? The
   example uses prior logged values as inputs to GoogleTest matchers.
 - **Stability:** does a test behave consistently across repeated runs? The
-  listener records results and logged values; `Test2` demonstrates one
-  configured bounded-variation assertion. There is no automatic flakiness
-  detector or general stability metric.
+  `Stability` example applies a skip policy to a failed random check using the
+  recorded failure fraction. It is not a flakiness detector or a reliable
+  failure-rate estimate.
 - **Performance:** has a test's duration changed significantly compared with
   its recent successful runs? The fixture includes a basic historical duration
   check.
@@ -186,10 +199,6 @@ To disable a criterion check for a run:
 ./build/example --criteria_disable_expect_integrity
 ./build/example --criteria_disable_expect_stable
 ```
-
-These options can be combined with SQL output and other GoogleTest arguments.
-The stability dimension is not a separate automatic check in this example, so
-there is no `--criteria_disable_stability` option.
 
 ## License
 

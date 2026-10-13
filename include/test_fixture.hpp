@@ -19,6 +19,7 @@
 
 #define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
 #define EXPECT_THAT_AND_LOG(result, matcher_lambda) expect_that_and_log(result, #result, matcher_lambda, __FILE__, __LINE__)
+#define EXPECT_THAT_AND_STABLE(result, matcher_lambda, stable_threshold) expect_that_and_stable(result, matcher_lambda, stable_threshold, __FILE__, __LINE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
@@ -37,13 +38,24 @@ protected:
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 
+    std::optional<float> GetTestFailureRate();
+
     template <typename ResultType, typename MatcherFactory>
     TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda);
-    
+
+    /**
+     * @brief Evaluates the result against the matcher and logs the outcome, including file and line information.
+     * 
+     * @tparam ResultType The type of the result being evaluated.
+     * @tparam MatcherFactory A callable that returns a matcher for the result.
+     * @param result The actual result to be evaluated.
+     * @param result_name The name of the result variable for logging purposes.
+     * @param matcher_lambda A lambda that returns the matcher to evaluate the result against.
+     * @param file_name The name of the source file where the evaluation is performed.
+     * @param line_num The line number in the source file where the evaluation is performed.
+     */
     template <typename ResultType, typename MatcherFactory>
     void expect_that_and_log(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, std::string file_name, int line_num);
-
-    std::optional<float> GetTestFailureRate();
     
     /**
      * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
@@ -54,7 +66,17 @@ protected:
      */
     void expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference = 5.0);
 
-    void expect_stable(float stable_threshold);
+    /**
+     * @brief Checks if the result meets the stability expectations defined by the matcher and the stable threshold.
+     * 
+     * @tparam ResultType The type of the result being evaluated.
+     * @tparam MatcherFactory A callable that returns a matcher for the result.
+     * @param result The actual result to be evaluated.
+     * @param matcher_lambda A lambda that returns the matcher to evaluate the result against.
+     * @param stable_threshold The threshold defining the acceptable stability range.
+     */
+    template <typename ResultType, typename MatcherFactory>
+    void expect_that_and_stable(ResultType result, MatcherFactory matcher_lambda, float stable_threshold, std::string file_name, int line_num);
 private:
     // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values
@@ -94,11 +116,8 @@ private:
     // named `test_name` within suite `suite_name`. Returns a
     // zero-initialized DurationStats if no SQL database is configured or no
     // completed rows match.
-    static DurationStats ComputeDurationStats(const std::string& suite_name,
-                                              const std::string& test_name);
+    static DurationStats ComputeDurationStats(const std::string& suite_name, const std::string& test_name);
 
-    
-    
     /**
      * @brief Logs a message internally, typically for test results.
      * 

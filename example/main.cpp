@@ -41,7 +41,9 @@ protected:
         }
         float mean = sum_linear / values_list.size();
         float stdev = std::sqrt((sum_sq / values_list.size()) - (mean * mean));
-
+        if (std::isnan(stdev)) {
+            stdev = 0;
+        }
         return {mean, stdev};
     }
 };
@@ -52,16 +54,16 @@ TEST_F(TestExampleFixture, Performance) {
         input_value = 3;
     }
     std::this_thread::sleep_for(std::chrono::seconds(input_value));
-    // Performance evaluated in TestExampleFixture::TearDown
+    // Performance evaluated in the overriding GTestCriteriaFixture::TearDown
 }
 
 TEST_F(TestExampleFixture, Integrity) {
     float input_mean = 0.0f;
-    float stdev = 1.0f;
-    float result = test_normal_dist(input_mean, stdev);
     if (m_exert_failure) {
         input_mean = 10.0f;
     }
+    float stdev = 1.0f;
+    float result = test_normal_dist(input_mean, stdev);
     auto matcher = [this, c_stdev = stdev](std::string name) -> std::optional<testing::Matcher<float>> {
         auto values_list = GetValueList<float>(name);
         if (!values_list.has_value()) {
@@ -76,13 +78,17 @@ TEST_F(TestExampleFixture, Integrity) {
 
 TEST_F(TestExampleFixture, Stability) {
     float failure_rate = 0.05;
+    auto matcher_factory = [this, c_failure_rate = failure_rate]() {
+        std::optional<testing::Matcher<float>> gmock_matcher = testing::Lt(c_failure_rate);
+        return gmock_matcher;
+    };
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(0, 1.0);
     float uniform_rd_number = dis(gen);
     EXPECT_LT(failure_rate, uniform_rd_number);
     double stable_threshold = 0.05;
-    expect_stable(stable_threshold);
+    EXPECT_THAT_AND_STABLE(uniform_rd_number, matcher_factory, stable_threshold);
 }
 
 int main(int argc, char* argv[]) {
