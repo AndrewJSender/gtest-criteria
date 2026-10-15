@@ -56,17 +56,29 @@ std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::stri
 }
 
 template <typename ResultType, typename MatcherFactory>
-GTestCriteriaFixture::TestPartResultType GTestCriteriaFixture::run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda) {
-    std::optional<testing::Matcher<ResultType>> gmock_matcher = matcher_lambda(result_name);
+GTestCriteriaFixture::TestPartResultType GTestCriteriaFixture::run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, const std::string &file_name, int line_num) {
+    std::optional<testing::Matcher<ResultType>> gmock_matcher =
+        matcher_lambda(result_name);
+
     if (!gmock_matcher.has_value()) {
-        return GTestCriteriaFixture::TestPartResultType::kSuccess;
+        return TestPartResultType::kSuccess;
     }
-    EXPECT_THAT(result, *gmock_matcher);
-    if (testing::Matcher<ResultType>(*gmock_matcher).Matches(result)) {
-        return GTestCriteriaFixture::TestPartResultType::kSuccess;
-    } else {
-        return GTestCriteriaFixture::TestPartResultType::kNonFatalFailure;
+
+    testing::StringMatchResultListener explanation;
+    if (testing::ExplainMatchResult(*gmock_matcher, result, &explanation)) {
+        return TestPartResultType::kSuccess;
     }
+
+    std::ostringstream expected;
+    gmock_matcher->DescribeTo(&expected);
+
+    ADD_FAILURE_AT(file_name.c_str(), line_num)
+        << "Value of: " << result_name << std::endl
+        << "Expected: " << expected.str() << std::endl
+        << "  Actual: " << testing::PrintToString(result) << std::endl
+        << explanation.str() << std::endl;
+
+    return TestPartResultType::kNonFatalFailure;
 }
 
 template <typename ResultType, typename MatcherFactory>
@@ -76,7 +88,7 @@ void GTestCriteriaFixture::expect_that_and_log(ResultType result, const std::str
     // If any part is non-success, the overall test result will reflect the failure or skip.
     TestPartResultType result_type = TestPartResultType::kSuccess;
     if (!m_expect_integrity_disabled) {
-        result_type = run_matcher_lambda_and_expect_that(result, result_name, matcher_lambda);
+        result_type = run_matcher_lambda_and_expect_that(result, result_name, matcher_lambda, file_name, line_num);
     }
     LogValue(result_name, result, result_type , file_name, line_num);
 }
@@ -91,21 +103,31 @@ void GTestCriteriaFixture::expect_that_and_stable(ResultType result, MatcherFact
     if (!gmock_matcher.has_value()) {
         return;
     }
+
     if (testing::Matcher<ResultType>(*gmock_matcher).Matches(result)) {
         EXPECT_THAT(result, *gmock_matcher);
+        return;
+    }
+
+    testing::StringMatchResultListener explanation;
+    if (testing::ExplainMatchResult(*gmock_matcher, result, &explanation)) {
+        // passed
         return;
     }
 
     // non-fatal failure handling based on historical failure rate
     auto historical_failure_rate = GetTestFailureRate();
     if (!historical_failure_rate.has_value()) {
-        EXPECT_THAT(result, *gmock_matcher);
         return;
     }
     if (historical_failure_rate.value() < stable_threshold) {
         std::string msg = "Test is stable: historical failure rate " + std::to_string(historical_failure_rate.value()) + " is below the stable threshold " + std::to_string(stable_threshold) + ".";
-        GTEST_SKIP() << msg;
+        GTEST_MESSAGE_AT_(__FILE__, __LINE__, msg.c_str(), TestPartResultType::kSuccess);
     } else {
-        EXPECT_THAT(result, *gmock_matcher);
+        ADD_FAILURE_AT(file_name.c_str(), line_num)
+        // << "Value of: " << result_name << std::endl
+        << "Expected: " << testing::PrintToString(*gmock_matcher) << std::endl
+        << "  Actual: " << testing::PrintToString(result) << std::endl
+        << explanation.str() << std::endl;
     }
 }

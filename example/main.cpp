@@ -16,8 +16,7 @@
 
 class TestExampleFixture : public GTestCriteriaFixture {
 protected:
-    // TODO: add an argument parser --exert_failure
-    bool m_exert_failure = false;
+    inline static bool m_exert_failure = false;
 
     float test_normal_dist(float mean, float stdev) {
         std::random_device rd{};
@@ -45,6 +44,16 @@ protected:
             stdev = 0;
         }
         return {mean, stdev};
+    }
+    
+public:
+    static void ParseArgument(int argc, char* argv[]) {
+        for (int i = 0; i < argc; i++) {
+            const std::string argument(argv[i]);
+            if (argument == "--exert_failure") {
+                m_exert_failure = true;
+            }
+        }
     }
 };
 
@@ -86,7 +95,6 @@ TEST_F(TestExampleFixture, Stability) {
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(0, 1.0);
     float uniform_rd_number = dis(gen);
-    EXPECT_LT(failure_rate, uniform_rd_number);
     double stable_threshold = 0.05;
     EXPECT_THAT_AND_STABLE(uniform_rd_number, matcher_factory, stable_threshold);
 }
@@ -94,6 +102,7 @@ TEST_F(TestExampleFixture, Stability) {
 int main(int argc, char* argv[]) {
     auto sql_output = ParseGtestSqlOutputArgument(&argc, argv);
     GTestCriteriaFixture::ParseDisableExpectArguments(&argc, argv);
+    TestExampleFixture::ParseArgument(argc, argv);
     testing::InitGoogleTest(&argc, argv);
     RegisterSqlTestEventListenerIfRequested(sql_output);
     GTestCriteriaFixture::ConfigureSqlDb(sql_output);

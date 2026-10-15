@@ -41,7 +41,7 @@ protected:
     std::optional<float> GetTestFailureRate();
 
     template <typename ResultType, typename MatcherFactory>
-    TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda);
+    TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, const std::string &file_name, int line_num);
 
     /**
      * @brief Evaluates the result against the matcher and logs the outcome, including file and line information.

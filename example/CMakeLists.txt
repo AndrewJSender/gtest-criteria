@@ -79,6 +79,7 @@ set(EXAMPLE_SCHEME_ARGUMENTS
     "--criteria_disable_expect_performant"
     "--criteria_disable_expect_integrity"
     "--criteria_disable_expect_stable"
+    "--exert_failure"
 )
 
 set_target_properties(example PROPERTIES
