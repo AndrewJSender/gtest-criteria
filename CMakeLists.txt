@@ -57,6 +57,15 @@ file(READ "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/test_result_part.sql"
   GTEST_CRITERIA_SQL_TEST_RESULT_PART)
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sql/sqlite/criteria.sql"
   GTEST_CRITERIA_SQL_CRITERIA)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/environment.sql"
+  "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/iteration.sql"
+  "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/program.sql"
+  "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/suite.sql"
+  "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/test.sql"
+  "${GTEST_CRITERIA_SQL_OUTPUT_ROOT}/sql/test_result_part.sql"
+  "${CMAKE_CURRENT_SOURCE_DIR}/sql/sqlite/criteria.sql"
+)
 configure_file(
   cmake/embedded_sql.hpp.in
   "${CMAKE_CURRENT_BINARY_DIR}/generated/embedded_sql.hpp"

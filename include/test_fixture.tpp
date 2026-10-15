@@ -128,7 +128,8 @@ void GTestCriteriaFixture::expect_that_and_stable(ResultType result, const std::
         return out.str() + "%";
     };
     const auto disposition = gtest_criteria::ClassifyStability(
-        historical->rate, static_cast<std::size_t>(historical->count),
+        static_cast<float>(historical->rate),
+        static_cast<std::size_t>(historical->count),
         stable_threshold, m_criteria_options);
     if (disposition == gtest_criteria::StabilityDisposition::InsufficientHistory) {
         EXPECT_THAT(result, *gmock_matcher);
