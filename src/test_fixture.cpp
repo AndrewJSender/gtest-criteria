@@ -9,13 +9,8 @@
 #include "postgresql_backend.hpp"
 #include "sqlite_backend.hpp"
 
-#ifndef GTEST_CRITERIA_SQL_DIR
-#define GTEST_CRITERIA_SQL_DIR "sql/sqlite"
-#endif
-
 namespace {
 
-const std::string kCriteriaSqlFile = std::filesystem::absolute(GTEST_CRITERIA_SQL_DIR "/criteria.sql").string();
 const std::string kDisableExpectPerformantArgName = "--criteria_disable_expect_performant";
 const std::string kDisableExpectIntegrityArgName = "--criteria_disable_expect_integrity";
 const std::string kDisableExpectStableArgName = "--criteria_disable_expect_stable";
@@ -26,6 +21,7 @@ std::unique_ptr<testing::SqlBackend> GTestCriteriaFixture::m_db;
 bool GTestCriteriaFixture::m_expect_performant_disabled = false;
 bool GTestCriteriaFixture::m_expect_integrity_disabled = false;
 bool GTestCriteriaFixture::m_expect_stable_disabled = false;
+gtest_criteria::CriteriaOptions GTestCriteriaFixture::m_criteria_options;
 
 GTestCriteriaFixture::GTestCriteriaFixture()
     : m_test_suite_name(
@@ -33,6 +29,16 @@ GTestCriteriaFixture::GTestCriteriaFixture()
       m_test_name(
           testing::UnitTest::GetInstance()->current_test_info()->name())
 {
+}
+
+void GTestCriteriaFixture::ConfigureCriteria(
+    gtest_criteria::CriteriaOptions options) {
+    gtest_criteria::ValidateCriteriaOptions(options);
+    m_criteria_options = options;
+}
+
+gtest_criteria::CriteriaOptions GTestCriteriaFixture::GetCriteriaOptions() {
+    return m_criteria_options;
 }
 
 void GTestCriteriaFixture::ConfigureSqlDb(std::optional<SqlOutput> arg) {
@@ -61,8 +67,9 @@ GTestCriteriaFixture::DurationStats GTestCriteriaFixture::ComputeDurationStats(
     }
 
     const auto rows = m_db->Query(
-        kCriteriaSqlFile.c_str(), "select_test_durations",
-        {suite_name, test_name}, {});
+        "criteria.sql", "select_test_durations",
+        {suite_name, test_name},
+        {static_cast<std::int64_t>(m_criteria_options.history_limit)});
     if (rows.size() != 1 || rows.front().size() != 3) {
         throw std::runtime_error("Invalid result from test-duration query");
     }
@@ -88,7 +95,7 @@ std::optional<std::vector<std::string>> GTestCriteriaFixture::QueryLoggedEntries
 
         const std::string pattern = logged_name + "=%";
         const auto rows = m_db->Query(
-            kCriteriaSqlFile.c_str(), sql_key.c_str(),
+            "criteria.sql", sql_key.c_str(),
             {m_test_suite_name, m_test_name, pattern}, {});
         if (rows.empty()) {
             LOG_MSG("No rows returned for SQL key " + sql_key + " and logged name " + logged_name);
@@ -120,19 +127,20 @@ void GTestCriteriaFixture::SetUp()
     test_timer = std::chrono::high_resolution_clock::now();
 }
 
-void GTestCriteriaFixture::expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference)
+void GTestCriteriaFixture::expect_performant(std::chrono::high_resolution_clock::duration test_duration)
 {
     if (m_expect_performant_disabled) { return; }
     const DurationStats test_stats = ComputeDurationStats(m_test_suite_name, m_test_name);
-    if (test_stats.count == 0) { return; }
 
-    // Example performance expectation: test duration should not exceed mean +/- threshold_multiplier * stddev
-    // if test duration is suddenly faster, it should still fail to assess performance.
     const double test_duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(test_duration).count();
-    if (std::abs(test_duration_ms - test_stats.mean) < min_difference) {
-        return;
+    if (gtest_criteria::IsPerformanceDeviation(
+            test_duration_ms, test_stats.mean, test_stats.stddev,
+            static_cast<std::size_t>(test_stats.count), m_criteria_options)) {
+        ADD_FAILURE()
+            << "Test duration deviated beyond the performance threshold: "
+            << test_duration_ms << " ms vs historical mean "
+            << test_stats.mean << " ms";
     }
-    EXPECT_NEAR(test_duration_ms, test_stats.mean, stdev_threshold * test_stats.stddev) << "Test duration deviated beyond the performance threshold.";
 }
 
 
@@ -145,10 +153,7 @@ void GTestCriteriaFixture::TearDown()
      * for a given suite.test.
      */
     auto test_duration = std::chrono::high_resolution_clock::now() - test_timer;
-    auto current_result = testing::UnitTest::GetInstance()->current_test_info()->result();
-    double stdev_threshold = 3.0; // six-sigma rule
-    double min_difference = 10.0; // minimum difference in milliseconds to consider performance deviation
-    expect_performant(test_duration, stdev_threshold, min_difference);
+    expect_performant(test_duration);
 }
 
 void GTestCriteriaFixture::ParseDisableExpectArguments(int* argc, char* argv[]) {
@@ -190,19 +195,22 @@ void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int
     SUCCEED() << msg;
 }
 
-std::optional<float> GTestCriteriaFixture::GetTestFailureOrSkipRate() {
+std::optional<GTestCriteriaFixture::RateStats>
+GTestCriteriaFixture::GetTestFailureOrSkipRate() {
     if (!m_db) {
         return std::nullopt;
     }
 
     const auto rows = m_db->Query(
-        kCriteriaSqlFile.c_str(), "select_test_failure_or_skip_rate",
-        {m_test_suite_name, m_test_name}, {});
+        "criteria.sql", "select_test_failure_or_skip_rate",
+        {m_test_suite_name, m_test_name},
+        {static_cast<std::int64_t>(m_criteria_options.history_limit)});
 
-    if (rows.empty() || rows.front().empty() || rows.front().front().empty()) {
+    if (rows.empty() || rows.front().size() != 2 ||
+        rows.front().front().empty()) {
         LOG_MSG("No historical failure-or-skip rate returned for suite " + m_test_suite_name + " and test " + m_test_name);
         return std::nullopt;
     }
     
-    return std::stof(rows.front().front());
+    return RateStats{std::stod(rows.front()[0]), std::stoll(rows.front()[1])};
 }

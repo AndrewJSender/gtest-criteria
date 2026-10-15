@@ -115,8 +115,8 @@ void GTestCriteriaFixture::expect_that_and_stable(ResultType result, const std::
     ASSERT_GT(stable_threshold, 0.0) << "Stable threshold must be greater than 0.0";
 
     // non-fatal failure handling based on historical failure rate
-    auto historical_rate = GetTestFailureOrSkipRate();
-    if (!historical_rate.has_value()) {
+    const auto historical = GetTestFailureOrSkipRate();
+    if (!historical.has_value()) {
         EXPECT_THAT(result, *gmock_matcher);
         return;
     }
@@ -127,11 +127,30 @@ void GTestCriteriaFixture::expect_that_and_stable(ResultType result, const std::
         out << std::fixed << std::setprecision(2) << proportion * 100;
         return out.str() + "%";
     };
-    if (historical_rate.value() < stable_threshold) {
-        std::string msg = "Stable Test:\nfailure rate + skip rate = " + to_percent_str(historical_rate.value()) + " < " + to_percent_str(stable_threshold) + " = stable threshold" + "\nValue of: " + result_name + "\nExpected: " + testing::PrintToString(result) + " " + expected.str();
-        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(), TestPartResultType::kSkip);
+    const auto disposition = gtest_criteria::ClassifyStability(
+        historical->rate, static_cast<std::size_t>(historical->count),
+        stable_threshold, m_criteria_options);
+    if (disposition == gtest_criteria::StabilityDisposition::InsufficientHistory) {
+        EXPECT_THAT(result, *gmock_matcher);
+        return;
+    }
+    const std::string comparison =
+        disposition == gtest_criteria::StabilityDisposition::Skip ? " < " : " >= ";
+    const std::string classification =
+        disposition == gtest_criteria::StabilityDisposition::Skip
+            ? "Stable Test:\n"
+            : "Unstable Test:\n";
+    const std::string msg =
+        classification + "failure rate + skip rate = " +
+        to_percent_str(static_cast<float>(historical->rate)) + comparison +
+        to_percent_str(stable_threshold) + " = stable threshold" +
+        "\nValue of: " + result_name + "\nExpected: " +
+        testing::PrintToString(result) + " " + expected.str();
+    if (disposition == gtest_criteria::StabilityDisposition::Skip) {
+        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(),
+                          TestPartResultType::kSkip);
     } else {
-        std::string msg = "Unstable Test:\nfailure rate + skip rate = " + to_percent_str(historical_rate.value()) + " > " + to_percent_str(stable_threshold) + " = stable threshold" + "\nValue of: " + result_name + "\nExpected: " + testing::PrintToString(result) + " " + expected.str();
-        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(), TestPartResultType::kNonFatalFailure);
+        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(),
+                          TestPartResultType::kNonFatalFailure);
     }
 }
