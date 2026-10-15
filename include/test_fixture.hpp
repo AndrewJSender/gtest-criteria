@@ -6,11 +6,13 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "parse_argument.hpp"
+#include "criteria_policy.hpp"
 #include "sql_backend.hpp"
 
 #define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
@@ -22,6 +24,8 @@ class GTestCriteriaFixture : public testing::Test
 public:
     using TestPartResultType = testing::TestPartResult::Type;
     GTestCriteriaFixture();
+    static void ConfigureCriteria(gtest_criteria::CriteriaOptions options);
+    static gtest_criteria::CriteriaOptions GetCriteriaOptions();
     static void ConfigureSqlDb(std::optional<SqlOutput>);
     static void ParseDisableExpectArguments(int* argc, char* argv[]);
 protected:
@@ -34,7 +38,13 @@ protected:
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 
-    std::optional<float> GetTestFailureOrSkipRate();
+    struct RateStats
+    {
+        double rate = 0.0;
+        std::int64_t count = 0;
+    };
+
+    std::optional<RateStats> GetTestFailureOrSkipRate();
 
     template <typename ResultType, typename MatcherFactory>
     TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, const std::string &file_name, int line_num);
@@ -57,10 +67,8 @@ protected:
      * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
      *
      * @param test_duration The actual duration of the test.
-     * @param stdev_threshold The multiplier for the standard deviation to define the acceptable performance range.
-     * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
      */
-    void expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference = 5.0);
+    void expect_performant(std::chrono::high_resolution_clock::duration test_duration);
 
     /**
      * @brief Checks if the result meets the stability expectations defined by the matcher and the stable threshold.
@@ -128,6 +136,7 @@ private:
     static bool m_expect_performant_disabled;
     static bool m_expect_integrity_disabled;
     static bool m_expect_stable_disabled;
+    static gtest_criteria::CriteriaOptions m_criteria_options;
 
     const std::string m_test_suite_name;
     const std::string m_test_name;

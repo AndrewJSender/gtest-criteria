@@ -75,7 +75,7 @@ TEST_F(TestExampleFixture, Integrity) {
     }
     float stdev = 1.0f;
     float result = test_normal_dist(input_mean, stdev);
-    auto matcher = [this, c_stdev = stdev](std::string name) -> std::optional<testing::Matcher<float>> {
+    auto matcher_factory = [this, c_stdev = stdev](std::string name) -> std::optional<testing::Matcher<float>> {
         auto values_list = GetValueList<float>(name);
         if (!values_list.has_value()) {
             return std::nullopt;
@@ -84,7 +84,7 @@ TEST_F(TestExampleFixture, Integrity) {
         std::tie(expected_avg, expected_stdev) = calculate_mean_and_stdev(*values_list);
         return testing::FloatNear(expected_avg, 3 * c_stdev);
     };
-    EXPECT_THAT_AND_LOG(result, matcher);
+    EXPECT_THAT_AND_LOG(result, matcher_factory);
 }
 
 TEST_F(TestExampleFixture, Stability) {

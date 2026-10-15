@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            postgresql: "OFF"
+          - os: ubuntu-latest
+            postgresql: "ON"
+          - os: macos-latest
+            postgresql: "OFF"
+          - os: macos-latest
+            postgresql: "ON"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libsqlite3-dev libpq-dev
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install macOS PostgreSQL dependency
+        if: runner.os == 'macOS' && matrix.postgresql == 'ON'
+        run: brew install libpq
+
+      - name: Configure
+        shell: bash
+        run: |
+          postgres_args=()
+          if [[ "$RUNNER_OS" == "macOS" && "${{ matrix.postgresql }}" == "ON" ]]; then
+            postgres_args+=("-DPostgreSQL_ROOT=$(brew --prefix libpq)")
+          fi
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DGTEST_CRITERIA_WITH_POSTGRESQL=${{ matrix.postgresql }} \
+            "${postgres_args[@]}"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Validate installed package
+        if: matrix.postgresql == 'OFF'
+        shell: bash
+        run: |
+          prefix="$RUNNER_TEMP/gtest-criteria"
+          cmake -S . -B package-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$prefix" \
+            -DGTEST_CRITERIA_BUILD_EXAMPLE=OFF \
+            -DBUILD_TESTING=OFF
+          cmake --build package-build
+          cmake --install package-build
+          cmake -S tests/consumer -B consumer-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$prefix"
+          cmake --build consumer-build
+          ./consumer-build/gtest_criteria_consumer
+
+  xcode:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Generate and build Xcode project
+        run: |
+          cmake -S . -B build-xcode -G Xcode
+          cmake --build build-xcode --config Debug
+
+      - name: Test Xcode build
+        run: ctest --test-dir build-xcode -C Debug --output-on-failure
