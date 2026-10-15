@@ -18,3 +18,9 @@ FROM (
   AND test.start_timestamp IS NOT NULL AND test.end_timestamp IS NOT NULL
   ORDER BY test.id DESC LIMIT 100
 ) AS recent_durations;
+
+-- select_test_failure_or_skip_rate
+SELECT COUNT(*) FILTER (WHERE test.result = 'failed' OR test.result = 'skipped') * 1.0 / NULLIF(COUNT(*) FILTER (WHERE test.result = 'failed' OR test.result = 'skipped' OR test.result = 'passed'), 0)
+FROM test
+JOIN suite ON test.suite_id = suite.id
+WHERE suite.name = ? AND test.name = ?;

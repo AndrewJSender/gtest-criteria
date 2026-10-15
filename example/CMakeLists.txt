@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 
 project(gtest_criteria_example LANGUAGES CXX)
 
+if(POLICY CMP0114)
+  cmake_policy(SET CMP0114 NEW)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -58,6 +62,13 @@ file(GLOB_RECURSE EXAMPLE_SOURCES CONFIGURE_DEPENDS
 )
 
 add_executable(example ${EXAMPLE_SOURCES})
+set_source_files_properties(
+  "${PROJECT_ROOT}/include/test_fixture.tpp"
+  PROPERTIES HEADER_FILE_ONLY TRUE
+)
+target_sources(example PRIVATE
+  "${PROJECT_ROOT}/include/test_fixture.tpp"
+)
 target_include_directories(example PRIVATE
   "${PROJECT_ROOT}/include"
   "${SQL_OUTPUT_ROOT}/include"
@@ -76,8 +87,10 @@ target_link_libraries(example PRIVATE
 set(EXAMPLE_SCHEME_ARGUMENTS
     "--gtest_repeat=5"
     "--gtest_output=sqlite:test_output.db"
-    "--criteria_disable_expect_performant"
-    "--criteria_disable_expect_integrity"
+    # "--criteria_disable_expect_performant"
+    # "--criteria_disable_expect_integrity"
+    # "--criteria_disable_expect_stable"
+    # "--exert_failure"
 )
 
 set_target_properties(example PROPERTIES

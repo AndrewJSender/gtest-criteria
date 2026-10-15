@@ -6,10 +6,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <chrono>
-#include <cstdint>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -17,33 +14,65 @@
 #include "sql_backend.hpp"
 
 #define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
-
-#define EXPECT_THAT_AND_LOG(result, matcher_lambda)                                      \
-    expect_that_and_log(result, #result,                                                 \
-                        IsExpectIntegrityDisabled()                                      \
-                            ? decltype((matcher_lambda)(#result)){}                       \
-                            : (matcher_lambda)(#result),                                  \
-                        __FILE__, __LINE__)
+#define EXPECT_THAT_AND_LOG(result, matcher_lambda) expect_that_and_log(result, #result, matcher_lambda, __FILE__, __LINE__)
+#define EXPECT_THAT_AND_STABLE(result, matcher_lambda, stable_threshold) expect_that_and_stable(result, #result, matcher_lambda, stable_threshold, __FILE__, __LINE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
 public:
+    using TestPartResultType = testing::TestPartResult::Type;
+    GTestCriteriaFixture();
     static void ConfigureSqlDb(std::optional<SqlOutput>);
-    static void ParseDisableExpectArgument(int* argc, char* argv[]);
+    static void ParseDisableExpectArguments(int* argc, char* argv[]);
 protected:
     void SetUp() override;
     void TearDown() override;
-
-    static bool IsExpectIntegrityDisabled() { return m_expect_integrity_disabled; }
     
     template <typename T>
-    void LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num);
+    void LogValue(const std::string &logged_name, T value, TestPartResultType type, std::string file, int line_num);
 
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 
-    template <typename T>
-    void expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num);
+    std::optional<float> GetTestFailureOrSkipRate();
+
+    template <typename ResultType, typename MatcherFactory>
+    TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, const std::string &file_name, int line_num);
+
+    /**
+     * @brief Evaluates the result against the matcher and logs the outcome, including file and line information.
+     * 
+     * @tparam ResultType The type of the result being evaluated.
+     * @tparam MatcherFactory A callable that returns a matcher for the result.
+     * @param result The actual result to be evaluated.
+     * @param result_name The name of the result variable for logging purposes.
+     * @param matcher_lambda A lambda that returns the matcher to evaluate the result against.
+     * @param file_name The name of the source file where the evaluation is performed.
+     * @param line_num The line number in the source file where the evaluation is performed.
+     */
+    template <typename ResultType, typename MatcherFactory>
+    void expect_that_and_log(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, std::string file_name, int line_num);
+    
+    /**
+     * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
+     *
+     * @param test_duration The actual duration of the test.
+     * @param stdev_threshold The multiplier for the standard deviation to define the acceptable performance range.
+     * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
+     */
+    void expect_performant(std::chrono::high_resolution_clock::duration test_duration, double stdev_threshold, double min_difference = 5.0);
+
+    /**
+     * @brief Checks if the result meets the stability expectations defined by the matcher and the stable threshold.
+     * 
+     * @tparam ResultType The type of the result being evaluated.
+     * @tparam MatcherFactory A callable that returns a matcher for the result.
+     * @param result The actual result to be evaluated.
+     * @param matcher_lambda A lambda that returns the matcher to evaluate the result against.
+     * @param stable_threshold The threshold defining the acceptable stability range.
+     */
+    template <typename ResultType, typename MatcherFactory>
+    void expect_that_and_stable(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, float stable_threshold, std::string file_name, int line_num);
 private:
     // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values
@@ -56,7 +85,7 @@ private:
      * @param logged_name The name of the logged entries to retrieve.
      * @return std::optional<std::vector<std::string>> A vector of matching logged values with the "name=" prefix stripped, or std::nullopt if no matching entries are found.
      */
-    static std::optional<std::vector<std::string>> QueryLoggedEntries(const std::string& sql_key, const std::string& logged_name);
+    std::optional<std::vector<std::string>> QueryLoggedEntries(const std::string& sql_key, const std::string& logged_name);
 
     // Parses `raw` as a single value of type T, requiring the entire
     // string to be consumed. Returns std::nullopt if parsing fails.
@@ -67,7 +96,7 @@ private:
     // Returns std::nullopt if the query finds nothing or any entry fails to
     // parse.
     template <typename T>
-    static std::optional<std::vector<T>> GetValues(const std::string& sql_key, const std::string& logged_name);
+    std::optional<std::vector<T>> GetValues(const std::string& sql_key, const std::string& logged_name);
 
     // Mean and (population) standard deviation of `end_timestamp -
     // start_timestamp` across all completed rows of a table, in the same
@@ -83,18 +112,7 @@ private:
     // named `test_name` within suite `suite_name`. Returns a
     // zero-initialized DurationStats if no SQL database is configured or no
     // completed rows match.
-    static DurationStats ComputeDurationStats(const std::string& suite_name,
-                                              const std::string& test_name);
-
-    /**
-     * @brief Checks if the test duration meets the performance expectations based on the provided statistics.
-     * 
-     * @param stats The duration statistics to compare against.
-     * @param test_duration The actual duration of the test.
-     * @param threshold_multiplier The multiplier for the standard deviation to define the acceptable performance range.
-     * @param min_difference The minimum difference in milliseconds to consider a performance deviation significant.
-     */
-    static void expect_performant(DurationStats stats, std::chrono::high_resolution_clock::duration test_duration, double threshold_multiplier, double min_difference);
+    static DurationStats ComputeDurationStats(const std::string& suite_name, const std::string& test_name);
 
     /**
      * @brief Logs a message internally, typically for test results.
@@ -109,6 +127,10 @@ private:
     static std::unique_ptr<testing::SqlBackend> m_db;
     static bool m_expect_performant_disabled;
     static bool m_expect_integrity_disabled;
+    static bool m_expect_stable_disabled;
+
+    const std::string m_test_suite_name;
+    const std::string m_test_name;
 };
 
 #include "test_fixture.tpp"

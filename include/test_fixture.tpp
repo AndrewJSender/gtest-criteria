@@ -1,8 +1,12 @@
 // Copyright (c) 2026 Andrew J. Sender.
 // All rights reserved.
 
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 template <typename T>
-void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, testing::TestPartResult::Type type, std::string file, int line_num)
+void GTestCriteriaFixture::LogValue(const std::string &logged_name, T value, TestPartResultType type, std::string file, int line_num)
 {
     testing::Message msg;
     msg << logged_name << "=" << value;
@@ -55,15 +59,79 @@ std::optional<std::vector<T>> GTestCriteriaFixture::GetValueList(const std::stri
     return GetValues<T>("select_logged_value_list", logged_name);
 }
 
-template <typename T>
-void GTestCriteriaFixture::expect_that_and_log(T result, const std::string &result_name, std::optional<::testing::Matcher<T>> gmock_matcher, std::string file_name, int line_num) {
-    using TestPartResultType = ::testing::TestPartResult::Type;
+template <typename ResultType, typename MatcherFactory>
+GTestCriteriaFixture::TestPartResultType GTestCriteriaFixture::run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, const std::string &file_name, int line_num) {
+    std::optional<testing::Matcher<ResultType>> gmock_matcher =
+        matcher_lambda(result_name);
+
+    if (!gmock_matcher.has_value()) {
+        return TestPartResultType::kSuccess;
+    }
+
+    testing::StringMatchResultListener explanation;
+    if (testing::ExplainMatchResult(*gmock_matcher, result, &explanation)) {
+        return TestPartResultType::kSuccess;
+    }
+
+    std::ostringstream expected;
+    gmock_matcher->DescribeTo(&expected);
+    
+    ADD_FAILURE_AT(file_name.c_str(), line_num) << "Value of: " << result_name 
+    << std::endl << "Expected: " << testing::PrintToString(result) << " " << expected.str() <<  std::endl << "Explanation: " << explanation.str();
+    return TestPartResultType::kNonFatalFailure;
+}
+
+template <typename ResultType, typename MatcherFactory>
+void GTestCriteriaFixture::expect_that_and_log(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, std::string file_name, int line_num) {
+    // The result type initiates to success, which is inaccurate.
+    // However, GTest evaluates the overall test result by its parts,
+    // If any part is non-success, the overall test result will reflect the failure or skip.
     TestPartResultType result_type = TestPartResultType::kSuccess;
-    if (!IsExpectIntegrityDisabled() && gmock_matcher.has_value()) {
-        EXPECT_THAT(result, *gmock_matcher);
-        if (!::testing::Matcher<T>(*gmock_matcher).Matches(result)) {
-            result_type = TestPartResultType::kNonFatalFailure;
-        }
+    if (!m_expect_integrity_disabled) {
+        result_type = run_matcher_lambda_and_expect_that(result, result_name, matcher_lambda, file_name, line_num);
     }
     LogValue(result_name, result, result_type , file_name, line_num);
+}
+
+template <typename ResultType, typename MatcherFactory>
+void GTestCriteriaFixture::expect_that_and_stable(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, float stable_threshold, std::string file_name, int line_num) {
+    std::optional<testing::Matcher<ResultType>> gmock_matcher = matcher_lambda();
+    if (!gmock_matcher.has_value()) {
+        return;
+    }
+
+    testing::StringMatchResultListener explanation;
+    if (testing::ExplainMatchResult(*gmock_matcher, result, &explanation)) {
+        // passed
+        return;
+    }
+
+    if (m_expect_stable_disabled) {
+        EXPECT_THAT(result, *gmock_matcher);
+        return;
+    }
+
+    ASSERT_LT(stable_threshold, 1.0) << "Stable threshold must be less than 1.0";
+    ASSERT_GT(stable_threshold, 0.0) << "Stable threshold must be greater than 0.0";
+
+    // non-fatal failure handling based on historical failure rate
+    auto historical_rate = GetTestFailureOrSkipRate();
+    if (!historical_rate.has_value()) {
+        EXPECT_THAT(result, *gmock_matcher);
+        return;
+    }
+    std::ostringstream expected;
+    gmock_matcher->DescribeTo(&expected);
+    auto to_percent_str = [](float proportion) {
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(2) << proportion * 100;
+        return out.str() + "%";
+    };
+    if (historical_rate.value() < stable_threshold) {
+        std::string msg = "Stable Test:\nfailure rate + skip rate = " + to_percent_str(historical_rate.value()) + " < " + to_percent_str(stable_threshold) + " = stable threshold" + "\nValue of: " + result_name + "\nExpected: " + testing::PrintToString(result) + " " + expected.str();
+        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(), TestPartResultType::kSkip);
+    } else {
+        std::string msg = "Unstable Test:\nfailure rate + skip rate = " + to_percent_str(historical_rate.value()) + " > " + to_percent_str(stable_threshold) + " = stable threshold" + "\nValue of: " + result_name + "\nExpected: " + testing::PrintToString(result) + " " + expected.str();
+        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(), TestPartResultType::kNonFatalFailure);
+    }
 }
