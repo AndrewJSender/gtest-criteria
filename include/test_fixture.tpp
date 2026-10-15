@@ -117,6 +117,7 @@ void GTestCriteriaFixture::expect_that_and_stable(ResultType result, const std::
     // non-fatal failure handling based on historical failure rate
     auto historical_rate = GetTestFailureOrSkipRate();
     if (!historical_rate.has_value()) {
+        EXPECT_THAT(result, *gmock_matcher);
         return;
     }
     std::ostringstream expected;
@@ -128,9 +129,9 @@ void GTestCriteriaFixture::expect_that_and_stable(ResultType result, const std::
     };
     if (historical_rate.value() < stable_threshold) {
         std::string msg = "Stable Test:\nfailure rate + skip rate = " + to_percent_str(historical_rate.value()) + " < " + to_percent_str(stable_threshold) + " = stable threshold" + "\nValue of: " + result_name + "\nExpected: " + testing::PrintToString(result) + " " + expected.str();
-        GTEST_MESSAGE_AT_(__FILE__, __LINE__, msg.c_str(), TestPartResultType::kSkip);
+        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(), TestPartResultType::kSkip);
     } else {
         std::string msg = "Unstable Test:\nfailure rate + skip rate = " + to_percent_str(historical_rate.value()) + " > " + to_percent_str(stable_threshold) + " = stable threshold" + "\nValue of: " + result_name + "\nExpected: " + testing::PrintToString(result) + " " + expected.str();
-        GTEST_MESSAGE_AT_(__FILE__, __LINE__, msg.c_str(), TestPartResultType::kNonFatalFailure);
+        GTEST_MESSAGE_AT_(file_name.c_str(), line_num, msg.c_str(), TestPartResultType::kNonFatalFailure);
     }
 }
