@@ -9,6 +9,10 @@ It is intended for C++ teams that want to investigate how test behavior changes
 over time, rather than relying only on the pass/fail result from the latest
 run.
 
+> **Project status:** experimental reference implementation. The repository
+> currently builds a demonstration executable rather than an installable
+> library, and its APIs and SQL behavior may change.
+
 ## Try the demo
 
 Build the example after initializing the submodules:
@@ -66,19 +70,20 @@ stability checks are quick. The source is
   unstable.
 - **Stability (`TestExampleFixture.Stability`):** intentionally has a 5%
   chance of failing a random check on each run. If that check fails,
-  `expect_stable(0.05)` looks up the failure rate for this test and calls
-  `GTEST_SKIP()` when that rate is below 5%. The SQL query calculates failed
-  test rows divided by all recorded rows with the same suite and test name; it
-  does not limit the calculation to a fixed number of recent runs or filter
-  out non-failed statuses from the denominator. The current run's row has
-  already been inserted when this check runs.
+  `expect_that_and_stable(..., 0.05)` looks up the combined failure-and-skip
+  rate for this test. It marks the current result as skipped when the
+  historical rate is below 5%; otherwise it records a non-fatal failure. The
+  SQL query divides finalized failed and skipped rows by all finalized passed,
+  failed, and skipped rows with the same suite and test name. It does not limit
+  the calculation to a fixed number of recent runs.
 
 This stability behavior does not stop the random check from failing, predict
 future failures, or independently determine whether a test is flaky. It applies
 a specific policy to a failing run based on the recorded failure fraction. The
-query includes the current in-progress row in its denominator, so the result
-should be interpreted as a demonstration of the policy, not as a reliable
-historical failure-rate estimate.
+current in-progress row has the status `running` and is excluded from the
+calculation. If there is no finalized history yet, no stability classification
+is made for that result. The behavior should be interpreted as a demonstration
+of the policy, not as a reliable historical failure-rate estimate.
 
 For integrity, only successful logged result parts are returned as historical
 values. A value logged by a failed assertion is not included in later
@@ -90,7 +95,7 @@ The demo computes an observed failure fraction for one named test and applies
 the skip policy described above; it is not a general stability score, a
 flakiness classifier, or a predictor of future failures. The result is
 particularly sensitive to small sample sizes and to which runs are present in
-the database.
+the database. Failed and skipped runs are both counted in the numerator.
 
 ## Three dimensions of test quality
 
@@ -153,6 +158,23 @@ cmake --build build-xcode --config Debug
 open build-xcode/gtest_criteria_example.xcodeproj
 ```
 
+The generated `example` scheme runs five iterations, writes
+`test_output.db`, and leaves all three criteria enabled. Select the `example`
+scheme and the Debug configuration before running.
+
+The template implementation in
+[`include/test_fixture.tpp`](include/test_fixture.tpp) is registered as a
+header-only Xcode source. You can open it from the `example` group and set
+breakpoints normally. If a breakpoint remains hollow, clean the build folder
+and rebuild the Debug configuration. Do not add the `.tpp` file as a separately
+compiled source; its templates are instantiated through
+[`include/test_fixture.hpp`](include/test_fixture.hpp).
+
+CMake enables every entry supplied through `XCODE_SCHEME_ARGUMENTS`; it cannot
+generate an argument that is listed but unchecked. Add optional arguments in
+Xcode under **Product > Scheme > Edit Scheme > Run > Arguments**, or add them
+conditionally in CMake.
+
 ## Run with SQL output
 
 The demo command above writes results to SQLite. To run the example against a
@@ -199,6 +221,30 @@ To disable a criterion check for a run:
 ./build/example --criteria_disable_expect_integrity
 ./build/example --criteria_disable_expect_stable
 ```
+
+To deterministically exercise the demo's failure paths, add
+`--exert_failure`. This makes the performance test sleep longer, shifts the
+integrity sample, and forces the stability matcher to fail:
+
+```sh
+./build/example --gtest_output=sqlite:demo.db --exert_failure
+```
+
+The resulting process may exit unsuccessfully by design. Use an existing
+database with representative history when evaluating the stability policy.
+
+## Current limitations
+
+- This repository does not yet provide an install target, exported CMake
+  package, versioned public API, or release artifacts.
+- The top-level project does not yet have automated build and test workflows.
+- The demonstration uses randomized checks and is not a deterministic
+  regression suite.
+- PostgreSQL client headers and `libpq` are required even when only SQLite
+  output is used.
+- The statistical policies are examples and need minimum sample sizes,
+  domain-specific thresholds, and production validation before they should be
+  used as quality gates.
 
 ## License
 

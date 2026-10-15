@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.16)
 
 project(gtest_criteria_example LANGUAGES CXX)
 
+if(POLICY CMP0114)
+  cmake_policy(SET CMP0114 NEW)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -83,10 +87,10 @@ target_link_libraries(example PRIVATE
 set(EXAMPLE_SCHEME_ARGUMENTS
     "--gtest_repeat=5"
     "--gtest_output=sqlite:test_output.db"
-    "--criteria_disable_expect_performant"
-    "--criteria_disable_expect_integrity"
-    "--criteria_disable_expect_stable"
-    "--no-exert_failure"
+    # "--criteria_disable_expect_performant"
+    # "--criteria_disable_expect_integrity"
+    # "--criteria_disable_expect_stable"
+    # "--exert_failure"
 )
 
 set_target_properties(example PROPERTIES

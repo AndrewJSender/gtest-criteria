@@ -199,12 +199,10 @@ std::optional<float> GTestCriteriaFixture::GetTestFailureOrSkipRate() {
         kCriteriaSqlFile.c_str(), "select_test_failure_or_skip_rate",
         {m_test_suite_name, m_test_name}, {});
 
-    if (rows.empty()) {
-        LOG_MSG("No rows returned for suite " + m_test_suite_name + " and test " + m_test_name);
+    if (rows.empty() || rows.front().empty() || rows.front().front().empty()) {
+        LOG_MSG("No historical failure-or-skip rate returned for suite " + m_test_suite_name + " and test " + m_test_name);
         return std::nullopt;
     }
     
-    // Assuming the first row and first column contains the failure rate
-    float failure_rate = std::stof(rows[0][0]);
-    return std::optional<float>(failure_rate);
+    return std::stof(rows.front().front());
 }

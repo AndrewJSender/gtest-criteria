@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Andrew J. Sender.
 // All rights reserved.
 
-#include <format>
+#include <iomanip>
+#include <sstream>
 #include <string>
 
 template <typename T>
