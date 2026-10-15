@@ -19,8 +19,8 @@ FROM (
   ORDER BY test.id DESC LIMIT 100
 ) AS recent_durations;
 
--- select_test_failure_rate
-SELECT COUNT(*) FILTER (WHERE test.result = 'failed') * 1.0 / COUNT(*)
+-- select_test_failure_or_skip_rate
+SELECT COUNT(*) FILTER (WHERE test.result = 'failed' OR test.result = 'skipped') * 1.0 / COUNT(*) FILTER (WHERE test.result = 'failed' OR test.result = 'skipped' OR test.result = 'passed')
 FROM test
 JOIN suite ON test.suite_id = suite.id
 WHERE suite.name = ? AND test.name = ?;

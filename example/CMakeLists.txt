@@ -58,6 +58,13 @@ file(GLOB_RECURSE EXAMPLE_SOURCES CONFIGURE_DEPENDS
 )
 
 add_executable(example ${EXAMPLE_SOURCES})
+set_source_files_properties(
+  "${PROJECT_ROOT}/include/test_fixture.tpp"
+  PROPERTIES HEADER_FILE_ONLY TRUE
+)
+target_sources(example PRIVATE
+  "${PROJECT_ROOT}/include/test_fixture.tpp"
+)
 target_include_directories(example PRIVATE
   "${PROJECT_ROOT}/include"
   "${SQL_OUTPUT_ROOT}/include"
@@ -79,7 +86,7 @@ set(EXAMPLE_SCHEME_ARGUMENTS
     "--criteria_disable_expect_performant"
     "--criteria_disable_expect_integrity"
     "--criteria_disable_expect_stable"
-    "--exert_failure"
+    "--no-exert_failure"
 )
 
 set_target_properties(example PROPERTIES

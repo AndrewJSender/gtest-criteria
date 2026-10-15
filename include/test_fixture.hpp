@@ -6,20 +6,16 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <chrono>
-#include <cstdint>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <vector>
-#include <functional>
 
 #include "parse_argument.hpp"
 #include "sql_backend.hpp"
 
 #define LOG_MSG(msg) log_internally(msg, __FILE__, __LINE__)
 #define EXPECT_THAT_AND_LOG(result, matcher_lambda) expect_that_and_log(result, #result, matcher_lambda, __FILE__, __LINE__)
-#define EXPECT_THAT_AND_STABLE(result, matcher_lambda, stable_threshold) expect_that_and_stable(result, matcher_lambda, stable_threshold, __FILE__, __LINE__)
+#define EXPECT_THAT_AND_STABLE(result, matcher_lambda, stable_threshold) expect_that_and_stable(result, #result, matcher_lambda, stable_threshold, __FILE__, __LINE__)
 
 class GTestCriteriaFixture : public testing::Test
 {
@@ -38,7 +34,7 @@ protected:
     template <typename T>
     std::optional<std::vector<T>> GetValueList(const std::string &logged_name);
 
-    std::optional<float> GetTestFailureRate();
+    std::optional<float> GetTestFailureOrSkipRate();
 
     template <typename ResultType, typename MatcherFactory>
     TestPartResultType run_matcher_lambda_and_expect_that(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, const std::string &file_name, int line_num);
@@ -76,7 +72,7 @@ protected:
      * @param stable_threshold The threshold defining the acceptable stability range.
      */
     template <typename ResultType, typename MatcherFactory>
-    void expect_that_and_stable(ResultType result, MatcherFactory matcher_lambda, float stable_threshold, std::string file_name, int line_num);
+    void expect_that_and_stable(ResultType result, const std::string &result_name, MatcherFactory matcher_lambda, float stable_threshold, std::string file_name, int line_num);
 private:
     // Runs `sql_key` against the current test's logged
     // "name=value" entries matching `logged_name`, and returns the values

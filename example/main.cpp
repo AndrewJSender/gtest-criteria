@@ -16,7 +16,7 @@
 
 class TestExampleFixture : public GTestCriteriaFixture {
 protected:
-    inline static bool m_exert_failure = false;
+    static bool m_exert_failure;
 
     float test_normal_dist(float mean, float stdev) {
         std::random_device rd{};
@@ -57,6 +57,8 @@ public:
     }
 };
 
+bool TestExampleFixture::m_exert_failure = false;
+
 TEST_F(TestExampleFixture, Performance) {
     int input_value = 1;
     if (m_exert_failure) {
@@ -88,15 +90,18 @@ TEST_F(TestExampleFixture, Integrity) {
 TEST_F(TestExampleFixture, Stability) {
     float failure_rate = 0.05;
     auto matcher_factory = [this, c_failure_rate = failure_rate]() {
-        std::optional<testing::Matcher<float>> gmock_matcher = testing::Lt(c_failure_rate);
+        std::optional<testing::Matcher<float>> gmock_matcher = testing::Gt(c_failure_rate);
         return gmock_matcher;
     };
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(0, 1.0);
     float uniform_rd_number = dis(gen);
-    double stable_threshold = 0.05;
-    EXPECT_THAT_AND_STABLE(uniform_rd_number, matcher_factory, stable_threshold);
+    if (m_exert_failure) {
+        // always fail
+        uniform_rd_number = 0;
+    }
+    EXPECT_THAT_AND_STABLE(uniform_rd_number, matcher_factory, failure_rate);
 }
 
 int main(int argc, char* argv[]) {

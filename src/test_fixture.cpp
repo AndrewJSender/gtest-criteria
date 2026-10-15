@@ -190,13 +190,13 @@ void GTestCriteriaFixture::log_internally(std::string msg, std::string file, int
     SUCCEED() << msg;
 }
 
-std::optional<float> GTestCriteriaFixture::GetTestFailureRate() {
+std::optional<float> GTestCriteriaFixture::GetTestFailureOrSkipRate() {
     if (!m_db) {
         return std::nullopt;
     }
 
     const auto rows = m_db->Query(
-        kCriteriaSqlFile.c_str(), "select_test_failure_rate",
+        kCriteriaSqlFile.c_str(), "select_test_failure_or_skip_rate",
         {m_test_suite_name, m_test_name}, {});
 
     if (rows.empty()) {
